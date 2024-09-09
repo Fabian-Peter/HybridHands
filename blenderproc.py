@@ -6,6 +6,7 @@ import bpy
 import numpy as np
 import csv
 
+# Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('output_dir', nargs='?', default="./output/render", help="Path to where the final files will be saved")
 args = parser.parse_args()
@@ -15,10 +16,9 @@ bproc.init()
 # Load the objects into the scene
 objs = bproc.loader.load_obj("./output/rand_0_skin.obj")
 for obj in objs:
-    obj.set_rotation_euler([0, 0, 0])  # [x_rotation, y_rotation, z_rotation] in radians
+    obj.set_rotation_euler([0, 0, 0])  # Optional: set initial object orientation
 
-
-# List of 3D world coordinates to project
+# World coordinates to be projected to 2D
 world_coords = np.array([
     [35.135318756103516, -41.1285400390625, -91.99156951904297],
     [24.913267135620117, -63.41144561767578, -57.26049041748047],
@@ -46,47 +46,45 @@ world_coords = np.array([
     [-30.807308197021484, -115.76215362548828, -39.91801071166992]
 ])
 
-# Find all materials
+# Find all materials and load textures
 materials = bproc.material.collect_all()
-
-# Collect all jpg images in the specified directory
 for mat in materials:
-    # Load one random image
     normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_normal.png")
     spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_spec.png")
     dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_diffuse.png")
-    # Set it as base color of the current material
     mat.set_principled_shader_value("Base Color", dif)
     mat.set_principled_shader_value("Normal", normal)
 
-# Loop through each camera pose
+# Prepare 5 camera poses with random positions and orientations
 for i in range(5):
-    # Sample random camera location above objects
+    # Random camera location above objects
     location = np.random.uniform([-200, -200, 180], [200, 200, 200])
-    # Compute rotation based on vector going from location towards poi
+    
+    # Compute rotation for camera to point towards the objects
     poi = bproc.object.compute_poi(objs)
-    rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - location, inplane_rot=np.random.uniform(-0.7854, 0.7854))
-    # Add homog cam pose based on location and rotation
+    rotation_matrix = bproc.camera.rotation_from_forward_vec(
+        poi - location, 
+        inplane_rot=np.random.uniform(-0.7854, 0.7854)  # random in-plane rotation
+    )
+    
+    # Set camera pose in the scene
     cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
-    bproc.camera.add_camera_pose(cam2world_matrix)
-    
-    
+    bproc.camera.add_camera_pose(cam2world_matrix)  # Add each pose individually
 
-    # Render the scene
-    data = bproc.renderer.render()
-    # Write the rendered data to a .hdf5 container
-    bproc.writer.write_hdf5(args.output_dir, data)
-    # Project 3D world coordinates (in this frame) into 2D image coordinates
+    # Project 3D world coordinates to 2D image coordinates for this camera pose
     image_coords = bproc.camera.project_points(world_coords)
 
-    # Prepare a file to save the results as CSV for this specific image
+    # Save 3D and corresponding 2D coordinates to CSV file
     csv_output_file = Path(args.output_dir) / f"image_{i}_coords.csv"
-
-    # Open the CSV file for writing
     with open(csv_output_file, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
-        # Save the 3D world coordinates and their corresponding 2D image coordinates to the CSV
         for wc, ic in zip(world_coords, image_coords):
-            writer.writerow([ ic[0], ic[1]])
+            writer.writerow([wc[0], wc[1], wc[2], ic[0], ic[1]])
 
+    print(f"Prepared camera pose {i} with random perspective")
 
+# Now render all 5 camera poses at once
+data = bproc.renderer.render()
+
+# Save rendered images and data into HDF5 format
+bproc.writer.write_hdf5(args.output_dir, data)
