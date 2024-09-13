@@ -20,6 +20,7 @@ for obj in objs:
 
 # World coordinates to be projected to 2D
 world_coords = np.array([
+    [9.460123062133789062e+00, -2.279652976989746094e+01, -1.027412338256835938e+02],
     [35.135318756103516, -41.1285400390625, -91.99156951904297],
     [24.913267135620117, -63.41144561767578, -57.26049041748047],
     [11.574165344238281, -80.37953186035156, -36.30665969848633],
@@ -45,6 +46,15 @@ world_coords = np.array([
     [-31.530231475830078, -101.22029876708984, -41.35429382324219],
     [-30.807308197021484, -115.76215362548828, -39.91801071166992]
 ])
+
+room_planes = [
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, -250, 250], rotation=[90, 0, 0]),
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 250, 250], rotation=[90, 0, 0]),
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 0, -250], rotation=[0, 0, 0]),
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[-0, 0, 250], rotation=[0, 0, 0])]
+for plane in room_planes:
+    plane.enable_rigidbody(False, collision_shape='BOX', mass=1.0, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
+
 
 # Find all materials and load textures
 materials = bproc.material.collect_all()
@@ -74,14 +84,22 @@ for i in range(5):
     # Project 3D world coordinates to 2D image coordinates for this camera pose
     image_coords = bproc.camera.project_points(world_coords)
 
-    # Save 3D and corresponding 2D coordinates to CSV file
+    # Compute the Z-depth of each point in camera space
+    # Multiply world coordinates by the camera transformation matrix
+    world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))  # Convert to homogeneous coordinates
+    camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T  # Transform to camera space
+    z_depths = camera_coords[:, 2]  # The Z coordinate in camera space
+
+    # Save 3D world coordinates, corresponding 2D image coordinates, and Z-depth to CSV file
     csv_output_file = Path(args.output_dir) / f"image_{i}_coords.csv"
     with open(csv_output_file, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
-        for wc, ic in zip(world_coords, image_coords):
-            writer.writerow([wc[0], wc[1], wc[2], ic[0], ic[1]])
+        # Write header
+        writer.writerow(['World_X', 'World_Y', 'World_Z', 'Image_X', 'Image_Y', 'Camera_Z'])
+        for wc, ic, z in zip(world_coords, image_coords, z_depths):
+            writer.writerow([wc[0], wc[1], wc[2], ic[0], ic[1], z])
 
-    print(f"Prepared camera pose {i} with random perspective")
+    print(f"Prepared camera pose {i} with random perspective and Z-depth")
 
 # Now render all 5 camera poses at once
 data = bproc.renderer.render()
