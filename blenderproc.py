@@ -10,14 +10,85 @@ import csv
 parser = argparse.ArgumentParser()
 parser.add_argument('output_dir', nargs='?', default="./output/render", help="Path to where the final files will be saved")
 args = parser.parse_args()
-
+xyz_file_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_joints.xyz'
+indices_to_extract = [5, 10, 15, 20, 25]
 bproc.init()
 
 # Load the objects into the scene
 objs = bproc.loader.load_obj("./output/rand_0_skin.obj")
 for obj in objs:
+    obj.enable_rigidbody(active=True, collision_shape='MESH') 
     obj.set_shading_mode("smooth")
     obj.set_rotation_euler([0, 0, 0])  # Optional: set initial object orientation
+
+# load textures
+materials = bproc.material.collect_all()
+for mat in materials:
+    normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_normal.png")
+    spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_spec.png")
+    dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_diffuse.png")
+    mat.set_principled_shader_value("Base Color", dif)
+    mat.set_principled_shader_value("Normal", normal)
+
+
+def extract_coordinates(filepath, indices):
+    coordinates = []
+    with open(filepath, 'r') as file:
+        lines = file.readlines()
+        # Flatten the list of coordinates
+        coords_list = [float(coord) for line in lines for coord in line.split()]
+        # Extract the required coordinates
+        for idx in indices:
+            x = coords_list[(idx - 1) * 3]
+            y = coords_list[(idx - 1) * 3 + 1]
+            z = coords_list[(idx - 1) * 3 + 2]
+            coordinates.append([x, y, z])
+    return coordinates
+
+# Extract the coordinates
+coordinates = extract_coordinates(xyz_file_path, indices_to_extract)
+
+# Create spheres at the extracted coordinates and enable collision
+for coord in coordinates:
+    sphere = bproc.object.create_primitive('SPHERE', scale=[3.5, 3.5, 3.5])
+
+    sphere.enable_rigidbody(active=True, collision_shape='SPHERE')   
+    # Slightly offset the sphere along the Z-axis to ensure it rests on top of the mesh
+    offset_coord = [coord[0], coord[1], coord[2] + 3.5]  # Offset by the sphere's radius (3.5 in this case)
+    sphere.set_location(offset_coord)
+
+    # Create a new unique material for the sphere
+    mat_marker = bproc.material.create("MarkerMaterial_" + str(coord))  # Ensure unique name
+
+    
+
+    # Define your material properties
+    grey_col = 1.0  # Example grey color
+    rough = np.random.uniform(0, 0.5)
+    spec = np.random.uniform(0.3, 1.0)
+    met = np.random.uniform(0, 0.5)
+
+    # Set the material properties
+    mat_marker.set_principled_shader_value("Base Color", [grey_col, grey_col, grey_col, 1])
+    mat_marker.set_principled_shader_value("Roughness", rough)
+    mat_marker.set_principled_shader_value("Specular", spec)
+    mat_marker.set_principled_shader_value("Metallic", met)
+   
+    sphere.enable_rigidbody(True, mass=1.0, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
+    sphere.hide(False)
+
+    # Check if the sphere has any materials; if not, add one
+    if len(sphere.get_materials()) == 0:
+        sphere.add_material(mat_marker)  # Create a new material slot and add the material
+    else:
+        sphere.set_material(0, mat_marker)  # Assign the material to the sphere at index 0
+
+
+    
+   
+
+# Print or use the extracted coordinates
+print("Extracted Coordinates:", coordinates)
 
 # World coordinates to be projected to 2D
 world_coords = np.array([
@@ -56,25 +127,11 @@ room_planes = [
 for plane in room_planes:
     plane.enable_rigidbody(False, collision_shape='BOX', mass=1.0, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
 
-# light
-light = bproc.types.Light()
-light.set_type("POINT")
-light.set_location([0,0,0])
-light.set_energy(600000000)
-light.set_radius(10000.0) 
 
 
-# load textures
-materials = bproc.material.collect_all()
-for mat in materials:
-    normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_normal.png")
-    spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_spec.png")
-    dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_diffuse.png")
-    mat.set_principled_shader_value("Base Color", dif)
-    mat.set_principled_shader_value("Normal", normal)
 
 # different camera angles
-for i in range(2):
+for i in range(5):
     # Random camera location
     location = np.random.uniform([-200, -200, 180], [200, 200, 200])
     
@@ -85,6 +142,30 @@ for i in range(2):
         inplane_rot=np.random.uniform(-0.7854, 0.7854)  # random in-plane rotation
     )
     
+    
+    # Given location
+    given_location = np.array([8.21917, -37.8768, -57.4157])  # Replace x, y, z with your coordinates
+    fixed_distance = 100.0  # Fixed distance from the given location
+
+    # Generate random angles for spherical coordinates
+    theta = np.random.uniform(0, 2 * np.pi)  # Angle around the vertical axis
+    phi = np.random.uniform(0, np.pi)        # Angle from the vertical axis
+
+    # Calculate random position
+    random_x = fixed_distance * np.sin(phi) * np.cos(theta)
+    random_y = fixed_distance * np.sin(phi) * np.sin(theta)
+    random_z = fixed_distance * np.cos(phi)
+
+    # Calculate the final light position
+    light_position = given_location + np.array([random_x, random_y, random_z])
+
+    # Create the light at the calculated position
+    area_light = bproc.types.Light()
+    area_light.set_type("POINT")
+    area_light.set_location(light_position)
+    area_light.set_radius(100)
+    area_light.set_energy(600000)
+
     # Set camera pose in the scene
     cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
     bproc.camera.add_camera_pose(cam2world_matrix)  # Add each pose individually
