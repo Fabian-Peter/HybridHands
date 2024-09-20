@@ -48,15 +48,22 @@ world_coords = np.array([
 ])
 
 room_planes = [
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, -250, 250], rotation=[90, 0, 0]),
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 250, 250], rotation=[90, 0, 0]),
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 0, -250], rotation=[0, 0, 0]),
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[-0, 0, 250], rotation=[0, 0, 0])]
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, -300, 0], rotation=[90, 0, 0]),
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 300, 0], rotation=[90, 0, 0]),
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 0, -300], rotation=[0, 0, 0]),
+               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[-0, 0, 300], rotation=[0, 0, 0])]
 for plane in room_planes:
     plane.enable_rigidbody(False, collision_shape='BOX', mass=1.0, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
 
+# light
+light = bproc.types.Light()
+light.set_type("POINT")
+light.set_location([0,0,0])
+light.set_energy(500000000)
+light.set_radius(10000.0) 
 
-# Find all materials and load textures
+
+# load textures
 materials = bproc.material.collect_all()
 for mat in materials:
     normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_normal.png")
@@ -65,12 +72,12 @@ for mat in materials:
     mat.set_principled_shader_value("Base Color", dif)
     mat.set_principled_shader_value("Normal", normal)
 
-# Prepare 5 camera poses with random positions and orientations
-for i in range(5):
-    # Random camera location above objects
+# different camera angles
+for i in range(2):
+    # Random camera location
     location = np.random.uniform([-200, -200, 180], [200, 200, 200])
     
-    # Compute rotation for camera to point towards the objects
+    # Compute rotation for camera to point towards poi
     poi = bproc.object.compute_poi(objs)
     rotation_matrix = bproc.camera.rotation_from_forward_vec(
         poi - location, 
