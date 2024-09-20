@@ -16,6 +16,7 @@ bproc.init()
 # Load the objects into the scene
 objs = bproc.loader.load_obj("./output/rand_0_skin.obj")
 for obj in objs:
+    obj.set_shading_mode("smooth")
     obj.set_rotation_euler([0, 0, 0])  # Optional: set initial object orientation
 
 # World coordinates to be projected to 2D
@@ -59,7 +60,7 @@ for plane in room_planes:
 light = bproc.types.Light()
 light.set_type("POINT")
 light.set_location([0,0,0])
-light.set_energy(500000000)
+light.set_energy(600000000)
 light.set_radius(10000.0) 
 
 
