@@ -32,8 +32,6 @@ for mat in materials:
     mat.set_principled_shader_value("Base Color", dif)
     mat.set_principled_shader_value("Normal", normal)
 
-
-
 def extract_coordinates(filepath, indices):
     
     # Read file and store all coordinates
@@ -50,7 +48,6 @@ def extract_coordinates(filepath, indices):
             all_coordinates.append([x, y, z])
     
     # Now extract the required coordinates at the given indices
-  
     for idx in indices:
         extracted_coordinates.append(all_coordinates[idx - 1])  # Indices are 1-based, adjust by -1
 
@@ -59,8 +56,9 @@ def extract_coordinates(filepath, indices):
 # Usage: Provide your xyz_file_path
 coordinates = extract_coordinates(xyz_file_path, indices_to_extract)
 
-
+# Group spheres so we can hide/show them easily later
 spheres = []
+
 # Create spheres at the extracted coordinates and enable collision
 for coord in extracted_coordinates:
     sphere = bproc.object.create_primitive('SPHERE', scale=[3.5, 3.5, 3.5])
@@ -72,8 +70,6 @@ for coord in extracted_coordinates:
 
     # Create a new unique material for the sphere
     mat_marker = bproc.material.create("MarkerMaterial_" + str(coord))  # Ensure unique name
-
-    
 
     # Define your material properties
     grey_col = 1.0  # Example grey color
@@ -87,7 +83,7 @@ for coord in extracted_coordinates:
     mat_marker.set_principled_shader_value("Specular", spec)
     mat_marker.set_principled_shader_value("Metallic", met)
    
-    sphere.enable_rigidbody(True, mass=1.0, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
+    sphere.enable_rigidbody(True, mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
     sphere.hide(False)
 
     # Check if the sphere has any materials; if not, add one
@@ -95,23 +91,22 @@ for coord in extracted_coordinates:
         sphere.add_material(mat_marker)  # Create a new material slot and add the material
     else:
         sphere.set_material(0, mat_marker)  # Assign the material to the sphere at index 0
-
-
-
-# Print or use the extracted coordinates
-print("Extracted Coordinates:", coordinates)
+    
+    # Add the sphere to the list for future use
+    spheres.append(sphere)
 
 # World coordinates to be projected to 2D
 world_coords = np.array(all_coordinates)
 
 room_planes = [
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, -300, 0], rotation=[90, 0, 0]),
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 300, 0], rotation=[90, 0, 0]),
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 0, -300], rotation=[0, 0, 0]),
-               bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[-0, 0, 300], rotation=[0, 0, 0])]
-for plane in room_planes:
-    plane.enable_rigidbody(False, collision_shape='BOX', mass=1.0, friction = 100.0, linear_damping = 0.99, angular_damping = 0.99)
+    bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, -300, 0], rotation=[90, 0, 0]),
+    bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 300, 0], rotation=[90, 0, 0]),
+    bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 0, -300], rotation=[0, 0, 0]),
+    bproc.object.create_primitive('PLANE', scale=[-644.637,-644.637,-644.637], location=[0, 0, 300], rotation=[0, 0, 0])
+]
 
+for plane in room_planes:
+    plane.enable_rigidbody(False, collision_shape='BOX', mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
 
 # Store camera and light parameters for both passes
 camera_poses = []
@@ -129,8 +124,7 @@ for i in range(5):
         inplane_rot=np.random.uniform(-0.7854, 0.7854)  # random in-plane rotation
     )
     
-    
-    # Given location
+    # Given location for light
     given_location = np.array([8.21917, -37.8768, -57.4157])  # Replace x, y, z with your coordinates
     fixed_distance = 100.0  # Fixed distance from the given location
 
@@ -151,7 +145,7 @@ for i in range(5):
     area_light.set_type("POINT")
     area_light.set_location(light_position)
     area_light.set_radius(100)
-    area_light.set_energy(600000)
+    area_light.set_energy(500000)
 
     # Store camera and light positions
     camera_poses.append((location, rotation_matrix))
@@ -165,13 +159,12 @@ for i in range(5):
     image_coords = bproc.camera.project_points(world_coords)
 
     # Compute the Z-depth of each point in camera space
-    # Multiply world coordinates by the camera transformation matrix
     world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))  # Convert to homogeneous coordinates
     camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T  # Transform to camera space
     z_depths = camera_coords[:, 2]  # The Z coordinate in camera space
 
     # Save 3D world coordinates, corresponding 2D image coordinates, and Z-depth to CSV file
-    csv_output_file = Path(args.output_dir) / f"image_{i}_coords.csv"
+    csv_output_file = Path(args.output_dir) / f"image_with_spheres_{i}_coords.csv"
     with open(csv_output_file, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
         # Write header
@@ -179,14 +172,22 @@ for i in range(5):
         for wc, ic, z in zip(world_coords, image_coords, z_depths):
             writer.writerow([wc[0], wc[1], wc[2], ic[0], ic[1], z])
 
-    print(f"Prepared camera pose {i} with random perspective and Z-depth")
+    print(f"Prepared camera pose {i} with spheres visible")
 
-# Now render all 5 camera poses at once
-data = bproc.renderer.render()
+# Render images with spheres visible
+data_with_spheres = bproc.renderer.render()
 
-# Save rendered images and data into HDF5 format
-bproc.writer.write_hdf5(args.output_dir, data)
+# Save rendered images and data with spheres
+bproc.writer.write_hdf5(args.output_dir + "/with_spheres", data_with_spheres)
 
+# Hide spheres and render 5 more images
+for sphere in spheres:
+    sphere.hide(True)
 
+# Render images with spheres hidden
+data_without_spheres = bproc.renderer.render()
 
+# Save rendered images and data without spheres
+bproc.writer.write_hdf5(args.output_dir + "/without_spheres", data_without_spheres)
 
+print("Rendered images with and without spheres.")
