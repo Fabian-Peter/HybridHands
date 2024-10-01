@@ -6,8 +6,8 @@ import bpy
 import numpy as np
 import csv
 
-# Constants
-SPHERE_RADIUS = 3.5
+# VARIABLES
+SPHERE_RADIUS = 4.0
 LIGHT_ENERGY = 500000
 LIGHT_RADIUS = 100
 FIXED_LIGHT_DISTANCE = 100.0
@@ -36,9 +36,9 @@ def load_materials():
     """Loads and applies textures to the materials in the scene."""
     materials = bproc.material.collect_all()
     for mat in materials:
-        normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_normal.png")
-        spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_spec.png")
-        dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\NIMBLE_model\\output\\rand_0_diffuse.png")
+        normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_normal.png")
+        spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_spec.png")
+        dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_diffuse.png")
         mat.set_principled_shader_value("Base Color", dif)
         mat.set_principled_shader_value("Normal", normal)
         mat.set_principled_shader_value("Specular", spec)
@@ -77,16 +77,17 @@ def create_spheres(coordinates):
     for coord in coordinates:
         sphere = bproc.object.create_primitive('SPHERE', scale=[SPHERE_RADIUS] * 3)
         sphere.enable_rigidbody(active=True, collision_shape='SPHERE')
-        offset_coord = [coord[0], coord[1], coord[2] + SPHERE_RADIUS]  # Offset to place on mesh
+        offset_coord = [coord[0], coord[1], coord[2] + 4.5]  # Offset to place on mesh
         sphere.set_location(offset_coord)
 
         # Create a unique material for the sphere
         mat_marker = bproc.material.create(f"MarkerMaterial_{coord}")
         grey_col = 1.0
+        mat_marker.set_principled_shader_value("Subsurface", 0.2)
         mat_marker.set_principled_shader_value("Base Color", [grey_col, grey_col, grey_col, 1])
         mat_marker.set_principled_shader_value("Roughness", np.random.uniform(0, 0.5))
         mat_marker.set_principled_shader_value("Specular", np.random.uniform(0.3, 1.0))
-        mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0.5))
+        mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0))
         
         sphere.enable_rigidbody(True, mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
         sphere.hide(False)
@@ -97,7 +98,7 @@ def create_spheres(coordinates):
     return spheres
 
 def create_room():
-    """Creates boundary planes for the room and sets up collision properties."""
+    """Creates the room"""
     room_planes = [
         bproc.object.create_primitive('PLANE', scale=ROOM_PLANE_SCALE, location=[0, -300, 0], rotation=[90, 0, 0]),
         bproc.object.create_primitive('PLANE', scale=ROOM_PLANE_SCALE, location=[0, 300, 0], rotation=[90, 0, 0]),
@@ -109,11 +110,11 @@ def create_room():
         plane.enable_rigidbody(False, collision_shape='BOX', mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
 
 def configure_camera_and_lights(objs, world_coords, output_dir):
-    """Sets up camera and lights at various positions and projects 3D coordinates into 2D image space."""
+    """Sets up camera and lights at various positions and projects 3D coordinates into 2D image space"""
     camera_poses = []
     light_positions = []
-    
-    for i in range(5):
+    # Amount of rendered images with visible and invisible markers
+    for i in range(2):
         location = np.random.uniform([-200, -200, 180], [200, 200, 200])
         poi = bproc.object.compute_poi(objs)
         rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - location, inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE))
