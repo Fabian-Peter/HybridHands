@@ -43,6 +43,29 @@ def load_materials():
         mat.set_principled_shader_value("Normal", normal)
         mat.set_principled_shader_value("Specular", spec)
 
+def extract_all_coordinates(filepath):
+    """
+    Extracts all 3D coordinates from the given XYZ file.
+
+    Args:
+        filepath: The path to the XYZ file.
+
+    Returns:
+        A list of all 3D coordinates in the file.
+    """
+    all_coordinates = []
+    
+    with open(filepath, 'r') as file:
+        lines = file.readlines()
+        coords_list = [float(coord) for line in lines for coord in line.split()]
+        
+        # Group into (x, y, z) tuples
+        for i in range(0, len(coords_list), 3):
+            x, y, z = coords_list[i:i + 3]
+            all_coordinates.append([x, y, z])
+    
+    return all_coordinates
+
 def extract_coordinates(filepath, indices):
     """
     Extracts coordinates from the given XYZ file based on the specified indices.
@@ -114,7 +137,7 @@ def configure_camera_and_lights(objs, world_coords, output_dir):
     camera_poses = []
     light_positions = []
     # Amount of rendered images with visible and invisible markers
-    for i in range(2):
+    for i in range(5):
         location = np.random.uniform([-200, -200, 180], [200, 200, 200])
         poi = bproc.object.compute_poi(objs)
         rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - location, inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE))
@@ -162,12 +185,18 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, index, output_d
     z_depths = camera_coords[:, 2]
 
     # Use the passed output_dir instead of args
-    csv_output_file = Path(output_dir) / f"image_with_spheres_{index}_coords.csv"
-    with open(csv_output_file, mode='w', newline='') as csv_file:
+    csv_output_file_without = Path(output_dir + "/without_spheres") / f"image_{index}_coords.csv"
+    with open(csv_output_file_without, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow(['World_X', 'World_Y', 'World_Z', 'Image_X', 'Image_Y', 'Camera_Z'])
+        writer.writerow(['Image_X', 'Image_Y', 'Camera_Z'])
         for wc, ic, z in zip(world_coords, image_coords, z_depths):
-            writer.writerow([wc[0], wc[1], wc[2], ic[0], ic[1], z])
+            writer.writerow([ic[0], ic[1], z])
+    csv_output_file_with = Path(output_dir + "/with_spheres") / f"image_{index}_coords.csv"
+    with open(csv_output_file_with, mode='w', newline='') as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(['Image_X', 'Image_Y', 'Camera_Z'])
+        for wc, ic, z in zip(world_coords, image_coords, z_depths):
+            writer.writerow([ic[0], ic[1], z])
 
 def render_images(spheres, output_dir):
     """Renders images with and without spheres and saves them."""
@@ -189,17 +218,25 @@ def main():
     load_materials()
     
     xyz_file_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_joints.xyz'
+    
+    # Extract all coordinates
+    all_coordinates = extract_all_coordinates(xyz_file_path)
+    
+    # Extract specific coordinates based on indices
     indices_to_extract = [5, 10, 15, 20, 25]
     extracted_coordinates = extract_coordinates(xyz_file_path, indices_to_extract)
 
+    # Create spheres at the specific coordinates
     spheres = create_spheres(extracted_coordinates)
     create_room()
 
-    world_coords = np.array(extracted_coordinates)
+    # Convert all coordinates to NumPy array for further processing
+    world_coords = np.array(all_coordinates)
 
-    # Pass args.output_dir to the configure_camera_and_lights function
+    # Pass the output directory to the function
     configure_camera_and_lights(objs, world_coords, args.output_dir)
 
+    # Render images with and without the spheres
     render_images(spheres, args.output_dir)
 
 if __name__ == "__main__":

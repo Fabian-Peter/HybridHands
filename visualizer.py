@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 
 # Directory paths
-output_dir = './output/render/'
+output_dir = './output/render/with_spheres'
 
 # Loop through all files in the directory
 for i in range(5):  # Adjust the range as needed
