@@ -1,5 +1,11 @@
-NIMBLE: A Non-rigid Hand Model with Bones and Muscles
+HybridHands - Generating hand pose estimation data using the NIMBLE model and blenderproc pipeline
 ========
+
+
+TODO Write stuff
+
+assets available under https://drive.google.com/drive/folders/12yMqqaYVs83P4lpWkjuobIjd--9erchv?usp=drive_link
+
 
 ![](https://liyuwei.cc/proj/img/nimble_teaser.jpg)
 
