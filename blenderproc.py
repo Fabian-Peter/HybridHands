@@ -21,7 +21,7 @@ def parse_arguments():
         'output_dir', nargs='?', default="./output/render",
         help="Path to where the final files will be saved"
     )
-    return parser.parse_args()
+    return parser.parse_args() 
 
 def load_scene_objects():
     """Load 3D objects into the scene and set their properties."""
@@ -199,7 +199,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, index, output_d
             writer.writerow([ic[0], ic[1], z])
 
 def render_images(spheres, output_dir):
-    """Renders images with and without spheres and saves them."""
+    """Renders images with and without spheres and saves them to /with and /without"""
     data_with_spheres = bproc.renderer.render()
     bproc.writer.write_hdf5(output_dir + "/with_spheres", data_with_spheres)
 
@@ -217,23 +217,24 @@ def main():
     objs = load_scene_objects()
     load_materials()
     
+    # TODO replace with relative path
     xyz_file_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_joints.xyz'
     
-    # Extract all coordinates
+    # Extraction of xyz joint coordinates
     all_coordinates = extract_all_coordinates(xyz_file_path)
     
-    # Extract specific coordinates based on indices
+    # Fingertip Coordinate extraction
     indices_to_extract = [5, 10, 15, 20, 25]
     extracted_coordinates = extract_coordinates(xyz_file_path, indices_to_extract)
 
-    # Create spheres at the specific coordinates
+    # Create markers (spheres) at the specific coordinates
     spheres = create_spheres(extracted_coordinates)
     create_room()
 
     # Convert all coordinates to NumPy array for further processing
     world_coords = np.array(all_coordinates)
 
-    # Pass the output directory to the function
+    # Randomly generate camera and light positions
     configure_camera_and_lights(objs, world_coords, args.output_dir)
 
     # Render images with and without the spheres
