@@ -25,7 +25,7 @@ def parse_arguments():
 
 def load_scene_objects():
     """Load 3D objects into the scene and set their properties."""
-    objs = bproc.loader.load_obj("./output/rand_0_skin.obj")
+    objs = bproc.loader.load_obj("./output/poses/rand_0_skin.obj")
     for obj in objs:
         obj.enable_rigidbody(active=True, collision_shape='MESH')
         obj.set_shading_mode("smooth")
@@ -36,9 +36,9 @@ def load_materials():
     """Loads and applies textures to the materials in the scene."""
     materials = bproc.material.collect_all()
     for mat in materials:
-        normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_normal.png")
-        spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_spec.png")
-        dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_diffuse.png")
+        normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_normal.png")
+        spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_spec.png")
+        dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_diffuse.png")
         mat.set_principled_shader_value("Base Color", dif)
         mat.set_principled_shader_value("Normal", normal)
         mat.set_principled_shader_value("Specular", spec)
@@ -218,7 +218,7 @@ def main():
     load_materials()
     
     # TODO replace with relative path
-    xyz_file_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\rand_0_joints.xyz'
+    xyz_file_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_joints.xyz'
     
     # Extraction of xyz joint coordinates
     all_coordinates = extract_all_coordinates(xyz_file_path)
