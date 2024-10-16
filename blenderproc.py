@@ -5,9 +5,16 @@ import argparse
 import bpy
 import numpy as np
 import csv
+import os
+import sys
+#costum package import
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+from blenderprocscripts_lib.scene_creation import SceneParameters
+
 
 # VARIABLES
-SPHERE_RADIUS = 4.0
+SPHERE_RADIUS = 3.5
 LIGHT_ENERGY = 500000
 LIGHT_RADIUS = 100
 FIXED_LIGHT_DISTANCE = 100.0
@@ -100,7 +107,7 @@ def create_spheres(coordinates):
     for coord in coordinates:
         sphere = bproc.object.create_primitive('SPHERE', scale=[SPHERE_RADIUS] * 3)
         sphere.enable_rigidbody(active=True, collision_shape='SPHERE')
-        offset_coord = [coord[0], coord[1], coord[2] + 4.5]  # Offset to place on mesh
+        offset_coord = [coord[0], coord[1], coord[2] + 6.5]  # Offset to place on mesh
         sphere.set_location(offset_coord)
 
         # Create a unique material for the sphere
@@ -137,7 +144,7 @@ def configure_camera_and_lights(objs, world_coords, output_dir):
     camera_poses = []
     light_positions = []
     # Amount of rendered images with visible and invisible markers
-    for i in range(5):
+    for i in range(3):
         location = np.random.uniform([-200, -200, 180], [200, 200, 200])
         poi = bproc.object.compute_poi(objs)
         rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - location, inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE))
