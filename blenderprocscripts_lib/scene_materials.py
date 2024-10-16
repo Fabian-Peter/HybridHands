@@ -1,6 +1,7 @@
 import numpy as np
 import blenderproc as bproc
 import os
+from pathlib import Path  
 
 class SceneMaterials:
 

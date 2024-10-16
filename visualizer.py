@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 import os
 
 # Directory paths
-output_dir = './output/render/with_spheres'
+output_dir = './output/render/with_spheres/iteration_index_2'
 
 # Loop through all files in the directory
 for i in range(5):  # Adjust the range as needed
     hdf5_file_path = os.path.join(output_dir, f'{i}.hdf5')
-    csv_file_path = os.path.join(output_dir, f'image_{i}_coords.csv')
+    csv_file_path = os.path.join(output_dir, f'{i}_coordinates.csv')
     output_image_path = os.path.join(output_dir, f'output_image_with_points_{i}.png')
 
     # Load the image from .hdf5 file
