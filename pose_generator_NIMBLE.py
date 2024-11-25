@@ -33,7 +33,7 @@ if __name__ == "__main__":
     num_poses = 10  # Define how many different random poses you want to generate
     batch_size = 1  # Number of samples per batch, can be increased for parallel processing
 
-    output_folder = "output/poses"
+    output_folder = "output/poses/NIMBLE"
     os.makedirs(output_folder, exist_ok=True)
 
     # Generate and save multiple random poses

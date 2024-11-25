@@ -257,7 +257,7 @@ def main():
     args = parse_arguments()
     bproc.init()
 
-    base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses'  # Base path for your files
+    base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\NIMBLE'  # Base path for your files
     num_iterations = 10  # Number of files to process
 
     for index in range(num_iterations):
