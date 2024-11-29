@@ -4,13 +4,39 @@ import os
 from pathlib import Path
 import csv
 import bpy
+import random
+
+
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
+
+
 
 def configure_camera_and_lights(objs, world_coords, output_dir, iteration_index):
     """Sets up cameras and lights and projects 3D coordinates dynamically."""
-    for i in range(5):  # Adjust for desired number of camera poses
+
+    # Predefined light positions
+    light_positions = [
+        [0.383889, 0, 0],
+        [0, 0.383889, 0],
+        [0, 0, 0.383889],
+        [-0.383889, 0, 0],
+        [0, -0.383889, 0],
+        [0, 0, -0.383889]
+    ]
+    
+    # Randomly select one position
+    selected_position = random.choice(light_positions)
+    
+    # Create and place the light
+    light = bproc.types.Light()
+    light.set_location(selected_position)
+    light.set_energy(10)  # Adjust energy as needed
+    print(f"Light created at: {selected_position}")
+    
+
+    for i in range(3):  # Adjust for desired number of camera poses
         # Random camera position
-        location = np.random.uniform([-0.35, -0.35, 0.35], [0.35, 0.35, 0.35])
+        location = np.random.uniform([-0.35, -0.35, -0.35], [0.35, 0.35, 0.35])
         poi = bproc.object.compute_poi(objs)
         rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - location, inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE))
 
@@ -76,6 +102,8 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
     hand_mesh.set_material(0, material)
     return objs
 
+
+
 def extract_all_coordinates(file_path_num):
     """Extracts all 3D coordinates from the given XYZ file."""
     all_coordinates = []
@@ -85,7 +113,45 @@ def extract_all_coordinates(file_path_num):
         for i in range(0, len(coords_list), 3):
             x, y, z = coords_list[i:i + 3]
             all_coordinates.append([x, y, z])
+    
+
+     # Extract coordinates at positions 3, 6, 9, 12, and 15 (1-based index)
+    selected_indices = [3, 6, 9, 12, 15]
+    extracted_coordinates = [all_coordinates[i] for i in selected_indices if i - 1 < len(all_coordinates)]
+    
+
+    create_spheres(extracted_coordinates)
+
+    # Print the extracted coordinates
+    print(f"Extracted Coordinates at positions {selected_indices}: {extracted_coordinates}")
+    
     return all_coordinates
+
+
+def create_spheres(coordinates):
+    spheres = []
+    for coord in coordinates:
+        sphere = bproc.object.create_primitive('SPHERE', scale=[0.004, 0.004, 0.004])
+        sphere.enable_rigidbody(active=True, collision_shape='SPHERE')
+        offset_coord = [coord[0]-0.012, coord[1], coord[2]]  # Offset to place on mesh
+        sphere.set_location(offset_coord)
+        print("created Sphere")
+        # Create a unique material for the sphere
+        mat_marker = bproc.material.create(f"MarkerMaterial_{coord}")
+        grey_col = 1.0
+
+        mat_marker.set_principled_shader_value("Subsurface", 0.2)
+        mat_marker.set_principled_shader_value("Base Color", [grey_col, grey_col, grey_col, 1])
+        mat_marker.set_principled_shader_value("Roughness", np.random.uniform(0, 0.5))
+        mat_marker.set_principled_shader_value("Specular", np.random.uniform(0.3, 1.0))
+        mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0))
+        
+        sphere.enable_rigidbody(True, mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
+        sphere.hide(False)
+        sphere.add_material(mat_marker)
+
+        spheres.append(sphere)
+
 
 def render_and_save(output_dir, iteration_index):
     """Renders the current scene and saves it to an HDF5 file in the correct iteration folder."""
@@ -100,7 +166,7 @@ def main():
     # Paths
     base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
     output_dir = "output/"
-    num_iterations = 3
+    num_iterations = 1
 
     # Initialize BlenderProc
     bproc.init()
