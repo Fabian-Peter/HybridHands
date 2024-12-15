@@ -9,7 +9,7 @@ import os
 output_dir = './output/iteration_0'
 
 # Loop through all files in the directory
-for i in range(9):  # Adjust the range as needed
+for i in range(5):  # Adjust the range as needed
     hdf5_file_path = os.path.join(output_dir, f'{i}.hdf5')
     csv_file_path = os.path.join(output_dir, f'{i}_coordinates.csv')
     output_image_path = os.path.join(output_dir, f'output_image_with_points_{i}.png')
@@ -24,32 +24,7 @@ for i in range(9):  # Adjust the range as needed
         image = Image.fromarray(np.uint8(image_data), 'RGB')
     else:
         image = Image.fromarray(np.uint8(image_data))  # Assuming grayscale
-
-    # Read 2D coordinates from CSV
-    coords_df = pd.read_csv(csv_file_path)
-    image_x = coords_df['Image_X'].astype(int)
-    image_y = coords_df['Image_Y'].astype(int)
-
-    # Convert coordinates to list of tuples
-    coordinates = list(zip(image_x, image_y))
-
-    # Draw coordinates on the image
-    draw = ImageDraw.Draw(image)
-
-    # Optionally, load a font (system default or custom)
-    try:
-        font = ImageFont.truetype("arial.ttf", size=12)  # Adjust the font size
-    except IOError:
-        font = ImageFont.load_default()  # Fallback to default if the font isn't found
-
-    # Draw points and index numbers on the image
-    for idx, (x, y) in enumerate(coordinates):
-        # Draw a red dot for each coordinate
-        draw.ellipse((x-3, y-3, x+3, y+3), fill='red', outline='red')
-
-        # Draw the index number next to the point
-        draw.text((x+5, y-5), str(idx), fill='white', font=font)  # Adjust offset to prevent overlap with the dot
-
+        
     # Save the result with points drawn
     image.save(output_image_path)
 

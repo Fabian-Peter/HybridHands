@@ -2,17 +2,21 @@ import blenderproc as bproc
 import numpy as np
 import os
 from pathlib import Path
-import csv
+import json
 import bpy
 import random
-
+import json
+import glob 
 
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
+iteration_counter = 0
 
 
-
-def configure_camera_and_lights(objs, world_coords, output_dir, iteration_index):
-    """Sets up cameras and lights and projects 3D coordinates dynamically."""
+def configure_camera_and_lights(objs, world_coords, output_dir):
+    """
+    Sets up a single camera and light, projects coordinates, and saves the JSON file.
+    """
+    global iteration_counter
 
     # Predefined light positions
     light_positions = [
@@ -23,29 +27,48 @@ def configure_camera_and_lights(objs, world_coords, output_dir, iteration_index)
         [0, -0.383889, 0],
         [0, 0, -0.383889]
     ]
-    
+
     # Randomly select one position
     selected_position = random.choice(light_positions)
-    
+
     # Create and place the light
     light = bproc.types.Light()
     light.set_location(selected_position)
-    light.set_energy(10)  # Adjust energy as needed
+    light.set_energy(10)
     print(f"Light created at: {selected_position}")
+
+    # Fixed distance from the object
+    radius = 0.5
+
+    # Random spherical coordinates for a single pose
+    theta = np.random.uniform(0, np.pi / 2)  # Polar angle (upper hemisphere)
+    phi = np.random.uniform(0, 2 * np.pi)   # Azimuthal angle
+
+    # Spherical to Cartesian conversion
+    x = radius * np.sin(theta) * np.cos(phi)
+    y = radius * np.sin(theta) * np.sin(phi)
+    z = radius * np.cos(theta)
+    location = np.array([x, y, z])
+
+    # Compute point of interest
+    poi = bproc.object.compute_poi(objs)
+
+    # Compute rotation matrix
+    rotation_matrix = bproc.camera.rotation_from_forward_vec(
+        poi - location, 
+        inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE)
+    )
+
+    # Add camera pose
+    cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
+    bproc.camera.add_camera_pose(cam2world_matrix)
+
+    # Save coordinates for the camera pose
+    project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, objs[0])
+
+     
     
 
-    for i in range(3):  # Adjust for desired number of camera poses
-        # Random camera position
-        location = np.random.uniform([-0.35, -0.35, -0.35], [0.35, 0.35, 0.35])
-        poi = bproc.object.compute_poi(objs)
-        rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - location, inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE))
-
-        # Add camera pose
-        cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
-        bproc.camera.add_camera_pose(cam2world_matrix)
-
-        # Save coordinates for each camera pose
-        project_and_save_coordinates(world_coords, cam2world_matrix, i, output_dir, iteration_index)
 
 def clear_scene():
     """Deletes all objects from the current Blender scene."""
@@ -57,29 +80,62 @@ def clear_scene():
         if obj.type != 'CAMERA':
             bpy.data.objects.remove(obj, do_unlink=True)
 
-def project_and_save_coordinates(world_coords, cam2world_matrix, camera_index, output_dir, iteration_index):
-    """Projects 3D coordinates to 2D image space and saves them with Z-depth."""
-    # Project points to image space
-    image_coords = bproc.camera.project_points(world_coords)
+
+
+
+def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj):
+    """
+    Projects 3D coordinates to 2D image space and saves them with Z-depth,
+    the camera's intrinsic matrix, pixel coordinates, and object vertices in JSON format.
+    """
+    global iteration_counter
 
     # Calculate Z-depth from camera coordinates
     world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
     camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T
     z_depths = camera_coords[:, 2]
 
-    # Create output directory for current iteration
-    iteration_dir = Path(output_dir) / f"iteration_{iteration_index}"
-    iteration_dir.mkdir(parents=True, exist_ok=True)
+    # Project 3D points to image space (pixel coordinates)
+    image_coords = bproc.camera.project_points(world_coords)
 
-    # Save to CSV
-    csv_output_file = iteration_dir / f"{camera_index}_coordinates.csv"
-    with open(csv_output_file, mode='w', newline='') as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(['Image_X', 'Image_Y', 'Camera_Z'])
-        for ic, z in zip(image_coords, z_depths):
-            writer.writerow([ic[0], ic[1], z])
+    # Get the camera's intrinsic matrix
+    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
 
-    print(f"Coordinates saved to: {csv_output_file}")
+    # Use bpy to extract the object's vertices in world space
+    obj_name = obj.get_name()
+    bpy_obj = bpy.data.objects.get(obj_name)
+    if bpy_obj is None:
+        raise ValueError(f"Object '{obj_name}' not found in bpy context.")
+
+    # Extract vertices in world coordinates
+    vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
+
+    # Convert vertices to camera space
+    vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
+    vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
+
+    # Prepare JSON data
+    json_data = {
+        "uv": [[ic[0], ic[1]] for ic in image_coords],
+        "xyz": [[wc[0], wc[1], z] for wc, z in zip(world_coords, z_depths)],
+        "hand_type": [1],
+        "K": intrinsic_matrix.tolist(),
+        "vertices": [[vc[0], vc[1], vc[2]] for vc in vertices_camera],
+    }
+
+    # Generate filenames with zero-padded counter
+    json_filename = f"{iteration_counter:08d}.json"
+    json_output_file = Path(output_dir) / json_filename
+
+    # Save JSON file
+    with open(json_output_file, mode='w') as json_file:
+        json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
+
+    print(f"Data saved to: {json_output_file}")
+   
+
+
+
 
 def setup_material():
     """Sets up a material with specific properties for the hand mesh."""
@@ -153,38 +209,53 @@ def create_spheres(coordinates):
         spheres.append(sphere)
 
 
-def render_and_save(output_dir, iteration_index):
-    """Renders the current scene and saves it to an HDF5 file in the correct iteration folder."""
-    iteration_dir = Path(output_dir) / f"iteration_{iteration_index}"
-    iteration_dir.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
-    hdf5_output_path = iteration_dir
+def render_and_save(output_dir):
+    """
+    Renders the current scene and saves the output to an HDF5 file.
+    """
+    global iteration_counter  # Access the global iteration_counter
+
+    # Generate filename with zero-padded counter
+    hdf5_filename = f"{iteration_counter:08d}.hdf5"
+    hdf5_output_file = Path(output_dir) 
+
+    # Render and save
     data = bproc.renderer.render()
-    bproc.writer.write_hdf5(str(hdf5_output_path), data)
-    print(f"HDF5 saved to: {hdf5_output_path}")
+    bproc.writer.write_hdf5(output_dir, data, append_to_existing_output=True)
+
+    print(f"HDF5 saved to: {hdf5_output_file}")
+
+
+   
 
 def main():
+
+    global iteration_counter
     # Paths
     base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
     output_dir = "output/"
-    num_iterations = 1
 
     # Initialize BlenderProc
     bproc.init()
 
-    for iteration_index in range(num_iterations):
-        # Reset the scene
-        bproc.utility.reset_keyframes()
-        clear_scene()
-        # Dynamically construct file paths
-        obj_file = os.path.join(base_path, f"{iteration_index}.obj")
-        xyz_file = os.path.join(base_path, f"{iteration_index}.xyz")
+    # Ensure output directory exists
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        # Check if files exist
-        if not os.path.exists(obj_file) or not os.path.exists(xyz_file):
-            print(f"Missing files for iteration {iteration_index}. Skipping.")
-            continue
+    # Get all .obj and .xyz files sorted by their index
+    obj_files = sorted(glob.glob(os.path.join(base_path, '*.obj')), key=lambda x: int(os.path.basename(x).split('.')[0]))
+    xyz_files = sorted(glob.glob(os.path.join(base_path, '*.xyz')), key=lambda x: int(os.path.basename(x).split('.')[0]))
 
-        print(f"Processing iteration {iteration_index}: {obj_file} and {xyz_file}")
+    # Check if the number of .obj files and .xyz files match
+    if len(obj_files) != len(xyz_files):
+        print("Mismatch between the number of .obj and .xyz files. Exiting.")
+        return
+
+    # Reset the scene
+  
+
+    # Process each .obj and .xyz pair
+    for obj_file, xyz_file in zip(obj_files, xyz_files):
+        print(f"Processing: {obj_file} and {xyz_file}")
 
         # Extract 3D coordinates
         all_coordinates = extract_all_coordinates(xyz_file)
@@ -194,14 +265,17 @@ def main():
         material = setup_material()
         objs = load_and_prepare_hand_mesh(obj_file, material)
 
-        # Configure cameras, lights, and save coordinates
-        configure_camera_and_lights(objs, world_coords, output_dir, iteration_index)
+        # Configure camera, lights, save JSON, and render
+        configure_camera_and_lights(objs, world_coords, output_dir)
+        render_and_save(output_dir)  # No need to pass iteration_counter
 
-        # Render the scene
-        render_and_save(output_dir, iteration_index)
+        # Increment the counter after saving both files
+        iteration_counter += 1
+
+        bproc.utility.reset_keyframes()
+        clear_scene()
 
     print("Processing completed!")
 
-# Run the main method
 if __name__ == "__main__":
     main()
