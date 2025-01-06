@@ -7,6 +7,7 @@ import bpy
 import random
 import json
 import glob 
+from mathutils import Vector
 
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
 iteration_counter = 0
@@ -90,17 +91,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     """
     global iteration_counter
 
-    # Calculate Z-depth from camera coordinates
-    world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
-    camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T
-    z_depths = camera_coords[:, 2]
-
-    # Project 3D points to image space (pixel coordinates)
-    image_coords = bproc.camera.project_points(world_coords)
-
-    # Get the camera's intrinsic matrix
-    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
-
     # Use bpy to extract the object's vertices in world space
     obj_name = obj.get_name()
     bpy_obj = bpy.data.objects.get(obj_name)
@@ -110,9 +100,24 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     # Extract vertices in world coordinates
     vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
 
-    # Convert vertices to camera space
+    # Project the 3D vertices to 2D image space (pixel coordinates)
+    vertices_coords = bproc.camera.project_points(vertices_world)
+
+    # Calculate Z-depth from camera coordinates for the vertices
     vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
     vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
+    vertices_z_depths = vertices_camera[:, 2]
+
+    # Calculate Z-depth for the world_coords
+    world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
+    camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T
+    z_depths = camera_coords[:, 2]
+
+    # Project 3D points to image space for the world coordinates
+    image_coords = bproc.camera.project_points(world_coords)
+
+    # Get the camera's intrinsic matrix
+    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
 
     # Prepare JSON data
     json_data = {
@@ -120,7 +125,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
         "xyz": [[wc[0], wc[1], z] for wc, z in zip(world_coords, z_depths)],
         "hand_type": [1],
         "K": intrinsic_matrix.tolist(),
-        "vertices": [[vc[0], vc[1], vc[2]] for vc in vertices_camera],
+        "vertices": [[vc[0], vc[1], z] for vc, z in zip(vertices_coords, vertices_z_depths)],  # Save projected 2D coordinates with depth
     }
 
     # Generate filenames with zero-padded counter
@@ -132,15 +137,30 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
 
     print(f"Data saved to: {json_output_file}")
-   
+
 
 
 
 
 def setup_material():
     """Sets up a material with specific properties for the hand mesh."""
+    # Define possible skin tones as RGBA values
+    skin_tones = [
+        [0xD1 / 255.0, 0x9E / 255.0, 0x8C / 255.0, 1.0],  # D19E8C
+        [0xFF / 255.0, 0xE4 / 255.0, 0xCC / 255.0, 1.0],  # FFE4CC
+        [0xF2 / 255.0, 0xD7 / 255.0, 0xAE / 255.0, 1.0],  # F2D7AE
+        [0xE0 / 255.0, 0xBA / 255.0, 0x92 / 255.0, 1.0],  # E0BA92
+        [0xCF / 255.0, 0x9D / 255.0, 0x7C / 255.0, 1.0],  # CF9D7C
+        [0x74 / 255.0, 0x57 / 255.0, 0x49 / 255.0, 1.0],  # 745749
+        [0x89 / 255.0, 0x65 / 255.0, 0x5A / 255.0, 1.0],  # 89655A
+    ]
+    
+    # Randomly select a skin tone
+    random_skin_tone = random.choice(skin_tones)
+
+    # Create and set up the material
     material = bproc.material.create('Hand_Material')
-    material.set_principled_shader_value("Base Color", [0.886, 0.659, 0.596, 1.0])  # Skin color
+    material.set_principled_shader_value("Base Color", random_skin_tone)  # Random skin color
     material.set_principled_shader_value("Roughness", 0.8)
     material.set_principled_shader_value("Specular", 0.5)
     return material
@@ -152,11 +172,18 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
         obj.enable_rigidbody(active=True, collision_shape='MESH')
         obj.set_rotation_euler([0, 0, 0])
 
+        # Update the world matrix after setting the rotation
+        bpy_obj = obj.blender_obj  # Get the Blender object corresponding to the bproc object
+        bpy.context.view_layer.update()  # Force the update of the scene
+        bpy_obj.matrix_world = bpy_obj.matrix_local  # Ensure the world matrix reflects the local transformation
+
     hand_mesh = objs[0]  # Assuming the hand mesh is the first object loaded
     if len(hand_mesh.blender_obj.data.materials) == 0:
         hand_mesh.blender_obj.data.materials.append(None)  # Create an empty material slot
     hand_mesh.set_material(0, material)
+
     return objs
+
 
 
 
@@ -176,14 +203,15 @@ def extract_all_coordinates(file_path_num):
     extracted_coordinates = [all_coordinates[i] for i in selected_indices if i - 1 < len(all_coordinates)]
     
 
-    create_spheres(extracted_coordinates)
+    #create_spheres(extracted_coordinates)
 
     # Print the extracted coordinates
     print(f"Extracted Coordinates at positions {selected_indices}: {extracted_coordinates}")
     
     return all_coordinates
 
-
+'''
+#Sphere Creation
 def create_spheres(coordinates):
     spheres = []
     for coord in coordinates:
@@ -207,7 +235,7 @@ def create_spheres(coordinates):
         sphere.add_material(mat_marker)
 
         spheres.append(sphere)
-
+'''
 
 def render_and_save(output_dir):
     """
@@ -233,7 +261,7 @@ def main():
     global iteration_counter
     # Paths
     base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
-    output_dir = "output/"
+    output_dir = "output/myHAND/training/rgb/"
 
     # Initialize BlenderProc
     bproc.init()
@@ -256,15 +284,12 @@ def main():
     # Process each .obj and .xyz pair
     for obj_file, xyz_file in zip(obj_files, xyz_files):
         print(f"Processing: {obj_file} and {xyz_file}")
-
+         # Set up material and load hand mesh
+        material = setup_material()
+        objs = load_and_prepare_hand_mesh(obj_file, material)
         # Extract 3D coordinates
         all_coordinates = extract_all_coordinates(xyz_file)
         world_coords = np.array(all_coordinates)
-
-        # Set up material and load hand mesh
-        material = setup_material()
-        objs = load_and_prepare_hand_mesh(obj_file, material)
-
         # Configure camera, lights, save JSON, and render
         configure_camera_and_lights(objs, world_coords, output_dir)
         render_and_save(output_dir)  # No need to pass iteration_counter

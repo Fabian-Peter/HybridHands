@@ -1,17 +1,17 @@
 import h5py
 import numpy as np
-import pandas as pd
+import json
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 import os
 
 # Directory paths
-output_dir = './output/iteration_0'
+output_dir = './output/myhand/training/rgb'
 
 # Loop through all files in the directory
 for i in range(9):  # Adjust the range as needed
     hdf5_file_path = os.path.join(output_dir, f'{i}.hdf5')
-    csv_file_path = os.path.join(output_dir, f'{i}_coordinates.csv')
+    json_file_path = os.path.join(output_dir, f'{i:08}.json')
     output_image_path = os.path.join(output_dir, f'output_image_with_points_{i}.png')
 
     # Load the image from .hdf5 file
@@ -25,13 +25,13 @@ for i in range(9):  # Adjust the range as needed
     else:
         image = Image.fromarray(np.uint8(image_data))  # Assuming grayscale
 
-    # Read 2D coordinates from CSV
-    coords_df = pd.read_csv(csv_file_path)
-    image_x = coords_df['Image_X'].astype(int)
-    image_y = coords_df['Image_Y'].astype(int)
+    # Read 3D coordinates (vertices) from the JSON file
+    with open(json_file_path, 'r') as json_file:
+        json_data = json.load(json_file)
+        xyz_coordinates = json_data['vertices']  # Extract the "xyz" field (3D coordinates)
 
-    # Convert coordinates to list of tuples
-    coordinates = list(zip(image_x, image_y))
+    # Convert 3D coordinates to 2D coordinates (x, y), disregarding z
+    coordinates = [(int(x), int(y)) for x, y, _ in xyz_coordinates]
 
     # Draw coordinates on the image
     draw = ImageDraw.Draw(image)
