@@ -103,29 +103,46 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     # Project the 3D vertices to 2D image space (pixel coordinates)
     vertices_coords = bproc.camera.project_points(vertices_world)
 
-    # Calculate Z-depth from camera coordinates for the vertices
+    # Calculate the Z-depth from camera coordinates for the vertices
     vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
     vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
     vertices_z_depths = vertices_camera[:, 2]
 
-    # Calculate Z-depth for the world_coords
+    # Calculate Z-depth for the world_coords in camera space
     world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
     camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T
     z_depths = camera_coords[:, 2]
 
-    # Project 3D points to image space for the world coordinates
+    # Project world_coords to 2D image space (pixel coordinates)
     image_coords = bproc.camera.project_points(world_coords)
 
     # Get the camera's intrinsic matrix
     intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
 
+    # Define the indices of the vertices to extract
+    target_indices = [745, 320, 444, 555, 672]
+
+    # Prepare lists to store the extracted 3D and 2D coordinates
+    extracted_xyz = []
+    extracted_uv = []
+
+    # Extract the coordinates for the specified vertices
+    for idx in target_indices:
+        # 2D coordinates from vertices_coords (projected 2D coordinates)
+        uv = vertices_coords[idx]
+        # 3D coordinates (world space) + Z-depth from camera space
+        extracted_xyz.append([uv[0], uv[1], vertices_z_depths[idx]])
+
+        # Also store the 2D coordinates for uv (already in image space)
+        extracted_uv.append([uv[0], uv[1]])
+
     # Prepare JSON data
     json_data = {
-        "uv": [[ic[0], ic[1]] for ic in image_coords],
-        "xyz": [[wc[0], wc[1], z] for wc, z in zip(world_coords, z_depths)],
+        "uv": [[ic[0], ic[1]] for ic in image_coords] + extracted_uv,  # Add the extracted 2D coordinates
+        "xyz": [[wc[0], wc[1], z] for wc, z in zip(world_coords, z_depths)] + extracted_xyz,  # Add the extracted 2D coordinates with depth
         "hand_type": [1],
         "K": intrinsic_matrix.tolist(),
-        "vertices": [[vc[0], vc[1], z] for vc, z in zip(vertices_coords, vertices_z_depths)],  # Save projected 2D coordinates with depth
+        "vertices": [[vc[0], vc[1], z] for vc, z in zip(vertices_coords, vertices_z_depths)],  # Save all vertices projected 2D with depth
     }
 
     # Generate filenames with zero-padded counter
@@ -142,19 +159,21 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
 
 
 
+
 def setup_material():
     """Sets up a material with specific properties for the hand mesh."""
     # Define possible skin tones as RGBA values
     skin_tones = [
-        [0xD1 / 255.0, 0x9E / 255.0, 0x8C / 255.0, 1.0],  # D19E8C
-        [0xFF / 255.0, 0xE4 / 255.0, 0xCC / 255.0, 1.0],  # FFE4CC
-        [0xF2 / 255.0, 0xD7 / 255.0, 0xAE / 255.0, 1.0],  # F2D7AE
-        [0xE0 / 255.0, 0xBA / 255.0, 0x92 / 255.0, 1.0],  # E0BA92
-        [0xCF / 255.0, 0x9D / 255.0, 0x7C / 255.0, 1.0],  # CF9D7C
+        [0x42 / 255.0, 0x30 / 255.0, 0x2E / 255.0, 1.0],  # 42302E
         [0x74 / 255.0, 0x57 / 255.0, 0x49 / 255.0, 1.0],  # 745749
+        [0x89 / 255.0, 0x65 / 255.0, 0x65 / 255.0, 1.0],  # 896653
+        [0xB0 / 255.0, 0x98 / 255.0, 0x84 / 255.0, 1.0],  # B09884
         [0x89 / 255.0, 0x65 / 255.0, 0x5A / 255.0, 1.0],  # 89655A
+        [0xF3 / 255.0, 0xC3 / 255.0, 0xAD / 255.0, 1.0],  # F3C3AD
+        [0xE3 / 255.0, 0xA5 / 255.0, 0x8D / 255.0, 1.0],  # E3A58D
+        [0xFF / 255.0, 0xD7 / 255.0, 0xBC / 255.0, 1.0],  # FFD7BC
+        [0xE9 / 255.0, 0xB8 / 255.0, 0x93 / 255.0, 1.0]  # E9B893
     ]
-    
     # Randomly select a skin tone
     random_skin_tone = random.choice(skin_tones)
 

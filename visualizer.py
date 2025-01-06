@@ -28,10 +28,10 @@ for i in range(9):  # Adjust the range as needed
     # Read 3D coordinates (vertices) from the JSON file
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
-        xyz_coordinates = json_data['vertices']  # Extract the "xyz" field (3D coordinates)
+        xyz_coordinates = json_data['uv']  # Extract the "xyz" field (3D coordinates)
 
     # Convert 3D coordinates to 2D coordinates (x, y), disregarding z
-    coordinates = [(int(x), int(y)) for x, y, _ in xyz_coordinates]
+    coordinates = [(int(x), int(y)) for x, y in xyz_coordinates]
 
     # Draw coordinates on the image
     draw = ImageDraw.Draw(image)
