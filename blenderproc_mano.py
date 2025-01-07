@@ -142,7 +142,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
         "xyz": [[wc[0], wc[1], z] for wc, z in zip(world_coords, z_depths)] + extracted_xyz,  # Add the extracted 2D coordinates with depth
         "hand_type": [1],
         "K": intrinsic_matrix.tolist(),
-        "vertices": [[vc[0], vc[1], z] for vc, z in zip(vertices_coords, vertices_z_depths)],  # Save all vertices projected 2D with depth
+        "vertices": [[vc[0], vc[1], z] for vc, z in zip(vertices_world, vertices_z_depths)],  # Save all vertices projected 2D with depth
     }
 
     # Generate filenames with zero-padded counter
