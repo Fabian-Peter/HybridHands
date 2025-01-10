@@ -86,8 +86,8 @@ def clear_scene():
 
 def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj):
     """
-    Projects 3D coordinates to 2D image space and saves them with Z-depth,
-    the camera's intrinsic matrix, pixel coordinates, and object vertices in JSON format.
+    Saves JSON data including the intrinsic matrix, all vertices, original coordinates from `.xyz`,
+    and additional coordinates from `target_indices` without normalizing `world_coords`.
     """
     global iteration_counter
 
@@ -97,6 +97,8 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     if bpy_obj is None:
         raise ValueError(f"Object '{obj_name}' not found in bpy context.")
 
+
+    image_coords = bproc.camera.project_points(world_coords)
     # Extract vertices in world coordinates
     vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
 
@@ -107,14 +109,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
     vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
     vertices_z_depths = vertices_camera[:, 2]
-
-    # Calculate Z-depth for the world_coords in camera space
-    world_coords_homogeneous = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
-    camera_coords = world_coords_homogeneous @ np.linalg.inv(cam2world_matrix).T
-    z_depths = camera_coords[:, 2]
-
-    # Project world_coords to 2D image space (pixel coordinates)
-    image_coords = bproc.camera.project_points(world_coords)
 
     # Get the camera's intrinsic matrix
     intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
@@ -130,19 +124,21 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     for idx in target_indices:
         # 2D coordinates from vertices_coords (projected 2D coordinates)
         uv = vertices_coords[idx]
-        # 3D coordinates (world space) + Z-depth from camera space
-        extracted_xyz.append([uv[0], uv[1], vertices_z_depths[idx]])
+
+        # 3D coordinates from vertices_world (world space positions)
+        extracted_xyz.append(vertices_world[idx])
 
         # Also store the 2D coordinates for uv (already in image space)
         extracted_uv.append([uv[0], uv[1]])
 
     # Prepare JSON data
     json_data = {
-        "uv": [[ic[0], ic[1]] for ic in image_coords] + extracted_uv,  # Add the extracted 2D coordinates
-        "xyz": [[wc[0], wc[1], z] for wc, z in zip(world_coords, z_depths)] + extracted_xyz,  # Add the extracted 2D coordinates with depth
+        "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + [[float(u[0]), float(u[1])] for u in extracted_uv],  # Append extracted_uv to all vertices' UVs
+        "xyz": [[float(wc[0]), float(wc[1]), float(wc[2])] for wc in world_coords] + [[float(xyz[0]), float(xyz[1]), float(xyz[2])] for xyz in extracted_xyz],
         "hand_type": [1],
         "K": intrinsic_matrix.tolist(),
-        "vertices": [[vc[0], vc[1], z] for vc, z in zip(vertices_world, vertices_z_depths)],  # Save all vertices projected 2D with depth
+        "vertices": [[float(vc[0]), float(vc[1]), float(z)] for vc, z in zip(vertices_world.tolist(), vertices_z_depths.tolist())],  # All vertices with Z-depth
+        "image_path": f"/training/rgb/{iteration_counter:08d}.jpg"
     }
 
     # Generate filenames with zero-padded counter
@@ -154,7 +150,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
 
     print(f"Data saved to: {json_output_file}")
-
 
 
 
@@ -267,6 +262,7 @@ def render_and_save(output_dir):
     hdf5_output_file = Path(output_dir) 
 
     # Render and save
+    
     data = bproc.renderer.render()
     bproc.writer.write_hdf5(output_dir, data, append_to_existing_output=True)
 
@@ -284,7 +280,7 @@ def main():
 
     # Initialize BlenderProc
     bproc.init()
-
+    bproc.camera.set_resolution(image_width=256, image_height=256)
     # Ensure output directory exists
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 

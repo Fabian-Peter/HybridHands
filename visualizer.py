@@ -1,34 +1,26 @@
-import h5py
-import numpy as np
 import json
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 import os
 
 # Directory paths
-output_dir = './output/myhand/training/rgb'
+output_dir = './output/myHAND/evaluation/rgb'
 
 # Loop through all files in the directory
 for i in range(9):  # Adjust the range as needed
-    hdf5_file_path = os.path.join(output_dir, f'{i}.hdf5')
+    # Change the file paths to point to .jpg images instead of .hdf5
+    jpg_file_path = os.path.join(output_dir, f'{i:08}.jpg')  # JPG file
     json_file_path = os.path.join(output_dir, f'{i:08}.json')
     output_image_path = os.path.join(output_dir, f'output_image_with_points_{i}.png')
 
-    # Load the image from .hdf5 file
-    with h5py.File(hdf5_file_path, 'r') as hdf5_file:
-        # Assuming the image data is stored in a dataset named 'colors'
-        image_data = hdf5_file['colors'][:]
-        
-    # Convert image data to an image format suitable for Pillow
-    if image_data.ndim == 3 and image_data.shape[-1] == 3:  # If the last dimension has 3 channels (RGB)
-        image = Image.fromarray(np.uint8(image_data), 'RGB')
-    else:
-        image = Image.fromarray(np.uint8(image_data))  # Assuming grayscale
+    # Load the image from .jpg file using Pillow
+    image = Image.open(jpg_file_path)
 
     # Read 3D coordinates (vertices) from the JSON file
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
-        xyz_coordinates = json_data['uv']  # Extract the "xyz" field (3D coordinates)
+        xyz_coordinates = json_data['uv']  # Extract the "uv" field (3D coordinates)
 
     # Convert 3D coordinates to 2D coordinates (x, y), disregarding z
     coordinates = [(int(x), int(y)) for x, y in xyz_coordinates]
