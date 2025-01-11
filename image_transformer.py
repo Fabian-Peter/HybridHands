@@ -4,8 +4,8 @@ import numpy as np
 from PIL import Image
 
 # Input and output folder paths
-input_folder = "./output/myHAND/evaluation/rgb"
-output_folder = "./output/myHAND/evaluation/rgb"
+input_folder = "./output/myHAND/training/rgb"
+output_folder = "./output/myHAND/training/rgb"
 
 # Total number of digits for leading zeros (adjust based on your expected file count)
 num_digits = 8

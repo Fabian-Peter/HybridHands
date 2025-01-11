@@ -14,7 +14,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 mano_layer = MANO(model_path=mano_model_path, use_pca=False, is_rhand=True).to(device)
 
 # Parameters
-num_samples = 5000  # Number of samples to generate
+num_samples = 100  # Number of samples to generate
 pose_std = 0.2  # Standard deviation for random noise in pose
 shape_std = 0.03  # Standard deviation for random noise in shape
 

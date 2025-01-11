@@ -133,14 +133,24 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
 
     # Prepare JSON data
     json_data = {
-        "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + [[float(u[0]), float(u[1])] for u in extracted_uv],  # Append extracted_uv to all vertices' UVs
+        "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + [[float(u[0]), float(u[1])] for u in extracted_uv],
         "xyz": [[float(wc[0]), float(wc[1]), float(wc[2])] for wc in world_coords] + [[float(xyz[0]), float(xyz[1]), float(xyz[2])] for xyz in extracted_xyz],
         "hand_type": [1],
         "K": intrinsic_matrix.tolist(),
-        "vertices": [[float(vc[0]), float(vc[1]), float(z)] for vc, z in zip(vertices_world.tolist(), vertices_z_depths.tolist())],  # All vertices with Z-depth
+        "vertices": [[float(vc[0]), float(vc[1]), float(z)] for vc, z in zip(vertices_world.tolist(), vertices_z_depths.tolist())],
         "image_path": f"/training/rgb/{iteration_counter:08d}.jpg"
     }
 
+    #Reorder the uv and xyz lists
+    reorder_mapping = [
+        0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
+        5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
+    ]
+    reordered_uv = [json_data["uv"][i] for i in reorder_mapping]
+    reordered_xyz = [json_data["xyz"][i] for i in reorder_mapping]
+
+    json_data["uv"] = reordered_uv
+    json_data["xyz"] = reordered_xyz
     # Generate filenames with zero-padded counter
     json_filename = f"{iteration_counter:08d}.json"
     json_output_file = Path(output_dir) / json_filename

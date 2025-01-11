@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import os
 
 # Directory paths
-output_dir = './output/myHAND/evaluation/rgb'
+output_dir = './output/myHAND/training/rgb'
 
 # Loop through all files in the directory
-for i in range(9):  # Adjust the range as needed
+for i in range(50):  # Adjust the range as needed
     # Change the file paths to point to .jpg images instead of .hdf5
     jpg_file_path = os.path.join(output_dir, f'{i:08}.jpg')  # JPG file
     json_file_path = os.path.join(output_dir, f'{i:08}.json')
@@ -30,7 +30,7 @@ for i in range(9):  # Adjust the range as needed
 
     # Optionally, load a font (system default or custom)
     try:
-        font = ImageFont.truetype("arial.ttf", size=12)  # Adjust the font size
+        font = ImageFont.truetype("arial.ttf", size=9)  # Adjust the font size
     except IOError:
         font = ImageFont.load_default()  # Fallback to default if the font isn't found
 
