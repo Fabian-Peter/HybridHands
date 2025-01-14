@@ -84,86 +84,6 @@ def clear_scene():
 
 
 
-def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj):
-    """
-    Saves JSON data including the intrinsic matrix, all vertices, original coordinates from `.xyz`,
-    and additional coordinates from `target_indices` without normalizing `world_coords`.
-    """
-    global iteration_counter
-
-    # Use bpy to extract the object's vertices in world space
-    obj_name = obj.get_name()
-    bpy_obj = bpy.data.objects.get(obj_name)
-    if bpy_obj is None:
-        raise ValueError(f"Object '{obj_name}' not found in bpy context.")
-
-
-    image_coords = bproc.camera.project_points(world_coords)
-    # Extract vertices in world coordinates
-    vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
-
-    # Project the 3D vertices to 2D image space (pixel coordinates)
-    vertices_coords = bproc.camera.project_points(vertices_world)
-
-    # Calculate the Z-depth from camera coordinates for the vertices
-    vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
-    vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
-    vertices_z_depths = vertices_camera[:, 2]
-
-    # Get the camera's intrinsic matrix
-    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
-
-    # Define the indices of the vertices to extract
-    target_indices = [745, 320, 444, 555, 672]
-
-    # Prepare lists to store the extracted 3D and 2D coordinates
-    extracted_xyz = []
-    extracted_uv = []
-
-    # Extract the coordinates for the specified vertices
-    for idx in target_indices:
-        # 2D coordinates from vertices_coords (projected 2D coordinates)
-        uv = vertices_coords[idx]
-
-        # 3D coordinates from vertices_world (world space positions)
-        extracted_xyz.append(vertices_world[idx])
-
-        # Also store the 2D coordinates for uv (already in image space)
-        extracted_uv.append([uv[0], uv[1]])
-
-    # Prepare JSON data
-    json_data = {
-        "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + [[float(u[0]), float(u[1])] for u in extracted_uv],
-        "xyz": [[float(wc[0]), float(wc[1]), float(wc[2])] for wc in world_coords] + [[float(xyz[0]), float(xyz[1]), float(xyz[2])] for xyz in extracted_xyz],
-        "hand_type": [1],
-        "K": intrinsic_matrix.tolist(),
-        "vertices": [[float(vc[0]), float(vc[1]), float(z)] for vc, z in zip(vertices_world.tolist(), vertices_z_depths.tolist())],
-        "image_path": f"/training/rgb/{iteration_counter:08d}.jpg"
-    }
-
-    #Reorder the uv and xyz lists
-    reorder_mapping = [
-        0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
-        5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
-    ]
-    reordered_uv = [json_data["uv"][i] for i in reorder_mapping]
-    reordered_xyz = [json_data["xyz"][i] for i in reorder_mapping]
-
-    json_data["uv"] = reordered_uv
-    json_data["xyz"] = reordered_xyz
-    # Generate filenames with zero-padded counter
-    json_filename = f"{iteration_counter:08d}.json"
-    json_output_file = Path(output_dir) / json_filename
-
-    # Save JSON file
-    with open(json_output_file, mode='w') as json_file:
-        json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
-
-    print(f"Data saved to: {json_output_file}")
-
-
-
-
 
 def setup_material():
     """Sets up a material with specific properties for the hand mesh."""
@@ -209,6 +129,87 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
     return objs
 
 
+def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj):
+    """
+    Saves JSON data including the intrinsic matrix, all vertices, original coordinates from .xyz,
+    and additional coordinates from target_indices in camera space.
+
+    Parameters:
+        world_coords (np.ndarray): 3D world coordinates of the keypoints.
+        cam2world_matrix (np.ndarray): 4x4 camera-to-world transformation matrix.
+        output_dir (str): Directory where the JSON file will be saved.
+        obj (bproc.object.Object): The BlenderProc object whose vertices will be extracted.
+    """
+    global iteration_counter
+
+    # Get object name and Blender object reference
+    obj_name = obj.get_name()
+    bpy_obj = bpy.data.objects.get(obj_name)
+    if bpy_obj is None:
+        raise ValueError(f"Object '{obj_name}' not found in Blender context.")
+
+    # Project 3D keypoints to 2D image coordinates
+    image_coords = bproc.camera.project_points(world_coords)
+
+    # Extract vertices in world coordinates
+    vertices_world = [bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices]
+
+    # Convert vertices_world to NumPy array for further processing
+    vertices_world_np = np.array([list(v) for v in vertices_world])
+
+    # Project vertices to 2D image space (pixel coordinates)
+    vertices_coords = bproc.camera.project_points(vertices_world_np)
+
+    # Transform vertices to camera space and compute Z-depth
+    vertices_homogeneous = np.hstack((vertices_world_np, np.ones((vertices_world_np.shape[0], 1))))
+    vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
+    vertices_z_depths = vertices_camera[:, 2]
+
+    # Transform world_coords to camera space
+    world_coords_homo = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))  # Add homogeneous coord
+    xyz_camera = (world_coords_homo @ np.linalg.inv(cam2world_matrix).T)[:, :3]  # Transform to camera space
+
+    # Transform extracted_xyz to camera space
+    target_indices = [745, 320, 444, 555, 672]
+    extracted_xyz_world = np.array([vertices_world[idx] for idx in target_indices])  # Get in world space
+    extracted_xyz_homo = np.hstack((extracted_xyz_world, np.ones((len(extracted_xyz_world), 1))))
+    extracted_xyz_camera = (extracted_xyz_homo @ np.linalg.inv(cam2world_matrix).T)[:, :3]
+
+    # Get the camera's intrinsic matrix
+    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
+
+    # Extract specific vertices' 2D coordinates
+    extracted_uv = [vertices_coords[idx].tolist() for idx in target_indices]
+
+    # Prepare JSON data
+    json_data = {
+        "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + extracted_uv,
+        "xyz": [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in xyz_camera] + 
+               [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in extracted_xyz_camera],
+        "hand_type": [1],
+        "K": intrinsic_matrix.tolist(),
+        "vertices": [[float(vc[0]), float(vc[1]), float(z)] for vc, z in zip(vertices_world_np.tolist(), vertices_z_depths.tolist())],
+        "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
+    }
+
+    # Reorder the uv and xyz lists
+    reorder_mapping = [
+        0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
+        5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
+    ]
+    json_data["uv"] = [json_data["uv"][i] for i in reorder_mapping]
+    json_data["xyz"] = [json_data["xyz"][i] for i in reorder_mapping]
+
+    # Save JSON file
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_filename = f"{iteration_counter:08d}.json"
+    json_output_file = output_dir / json_filename
+
+    with open(json_output_file, mode='w') as json_file:
+        json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
+
+    print(f"Data saved to: {json_output_file}")
 
 
 def extract_all_coordinates(file_path_num):
@@ -286,7 +287,7 @@ def main():
     global iteration_counter
     # Paths
     base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
-    output_dir = "output/myHAND/training/rgb/"
+    output_dir = "output/myHAND/evaluation/rgb/"
 
     # Initialize BlenderProc
     bproc.init()
