@@ -23,7 +23,7 @@ LIGHT_POSITIONS = [
     
 TOP_LIGHT_POSITION = [0, 0, 0.465]
 BOTTOM_LIGHT_POSITION = [0, 0, -0.465]
-ENERGY_SPOT = 10
+ENERGY_SPOT = 7.5
 ENERGY_AREA = 0.5
     
 SKIN_TONES = [
@@ -49,12 +49,15 @@ IMAGE_WIDTH = 256
 IMAGE_HEIGHT = 256
 iteration_counter = 0
 
+POSE_PATH = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
 
-def configure_camera_and_lights(objs, world_coords, output_dir):
+MARKER_OUTPUT_DIR = "output/myMarkerHAND/evaluation/rgb/"
+RGB_OUTPUT_DIR = "output/myRGBHAND/evaluation/rgb/"
+
+def configure_camera_and_lights(objs):
     """
     Sets up a single camera and light, projects coordinates, and saves the JSON file.
     """
-    global iteration_counter
 
     # Randomly select one position
     selected_position = random.choice(LIGHT_POSITIONS)
@@ -97,7 +100,9 @@ def configure_camera_and_lights(objs, world_coords, output_dir):
     cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
     bproc.camera.add_camera_pose(cam2world_matrix)
 
-    project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, objs[0])
+    return cam2world_matrix
+
+    
 
 
 def clear_scene():
@@ -140,7 +145,7 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
 
     return objs
 
-def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj):
+def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     """
     Saves JSON data including the intrinsic matrix, all vertices, original coordinates from .xyz,
     and additional coordinates from target_indices in camera space.
@@ -176,8 +181,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     #Add fingertips (target indices) to xyz and uv as 17 - 21 keypoints
     extracted_xyz_world = vertices_world[TARGET_INDICES]
 
-    #create Spheres at extracted xyz world positions:
-    create_spheres(extracted_xyz_world)
 
     extracted_xyz_homo = np.hstack((extracted_xyz_world, np.ones((len(extracted_xyz_world), 1))))
     extracted_xyz_camera = (extracted_xyz_homo @ world2cam_matrix.T)[:, :3]
@@ -201,15 +204,29 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     json_data["xyz"] = [json_data["xyz"][i] for i in REORDER_MAPPING]
 
     # Save JSON file
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    marker_output_dir = Path(MARKER_OUTPUT_DIR)
+    rgb_output_dir = Path(RGB_OUTPUT_DIR)
+
+    marker_output_dir.mkdir(parents=True, exist_ok=True)
+    rgb_output_dir.mkdir(parents=True, exist_ok=True)
+
     json_filename = f"{iteration_counter:08d}.json"
-    json_output_file = output_dir / json_filename
-    with open(json_output_file, mode='w') as json_file:
+
+    rgb_json_output_file = rgb_output_dir / json_filename
+    with open(rgb_json_output_file, mode='w') as json_file:
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
     
-    print(f"Data saved to: {json_output_file}")
+    print(f"Data saved to: {rgb_json_output_file}")
 
+    marker_json_output_file = marker_output_dir / json_filename
+    with open(marker_json_output_file, mode='w') as json_file:
+        json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
+    
+    print(f"Data saved to: {marker_json_output_file}")
+    
+    return extracted_xyz_world
+
+    
 
 def extract_all_coordinates(file_path_num):
     """Extracts all 3D coordinates from the given XYZ file."""
@@ -241,13 +258,16 @@ def create_spheres(coordinates):
         mat_marker.set_principled_shader_value("Base Color", [grey_col, grey_col, grey_col, 1])
         mat_marker.set_principled_shader_value("Roughness", np.random.uniform(0, 0.5))
         mat_marker.set_principled_shader_value("Specular", np.random.uniform(0.3, 1.0))
-        mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0))
+        mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0.5))
         
         sphere.enable_rigidbody(True, mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
         sphere.hide(False)
         sphere.add_material(mat_marker)
 
         spheres.append(sphere)
+
+    return spheres
+        
 
 
 def render_and_save(output_dir):
@@ -259,41 +279,28 @@ def render_and_save(output_dir):
     # Generate filename with zero-padded counter
     hdf5_filename = f"{iteration_counter:08d}.hdf5"
     hdf5_output_file = Path(output_dir) 
-
-    # Render and save
-    
+  
     data = bproc.renderer.render()
     bproc.writer.write_hdf5(output_dir, data, append_to_existing_output=True)
 
     print(f"HDF5 saved to: {hdf5_output_file}")
 
 
-   
-
 def main():
 
     global iteration_counter
-    # Paths
-    base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
-    output_dir = "output/myHAND/evaluation/rgb/"
-
-    # Initialize BlenderProc
+ 
     bproc.init()
-    bproc.camera.set_resolution(image_width=256, image_height=256)
-    # Ensure output directory exists
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
+    bproc.camera.set_resolution(IMAGE_HEIGHT, IMAGE_WIDTH)
+   
     # Get all .obj and .xyz files sorted by their index
-    obj_files = sorted(glob.glob(os.path.join(base_path, '*.obj')), key=lambda x: int(os.path.basename(x).split('.')[0]))
-    xyz_files = sorted(glob.glob(os.path.join(base_path, '*.xyz')), key=lambda x: int(os.path.basename(x).split('.')[0]))
+    obj_files = sorted(glob.glob(os.path.join(POSE_PATH, '*.obj')), key=lambda x: int(os.path.basename(x).split('.')[0]))
+    xyz_files = sorted(glob.glob(os.path.join(POSE_PATH, '*.xyz')), key=lambda x: int(os.path.basename(x).split('.')[0]))
 
     # Check if the number of .obj files and .xyz files match
     if len(obj_files) != len(xyz_files):
-        print("Mismatch between the number of .obj and .xyz files. Exiting.")
+        print("Mismatch between the number of .obj and .xyz files.")
         return
-
-    # Reset the scene
-  
 
     # Process each .obj and .xyz pair
     for obj_file, xyz_file in zip(obj_files, xyz_files):
@@ -305,8 +312,17 @@ def main():
         all_coordinates = extract_all_coordinates(xyz_file)
         world_coords = np.array(all_coordinates)
         # Configure camera, lights, save JSON, and render
-        configure_camera_and_lights(objs, world_coords, output_dir)
-        render_and_save(output_dir)  # No need to pass iteration_counter
+        matrix = configure_camera_and_lights(objs)
+
+        sphere_locations = project_and_save_coordinates(world_coords, matrix, objs[0])
+
+        print(sphere_locations)
+
+        render_and_save(RGB_OUTPUT_DIR)
+
+        create_spheres(sphere_locations)
+
+        render_and_save(MARKER_OUTPUT_DIR)
 
         # Increment the counter after saving both files
         iteration_counter += 1
