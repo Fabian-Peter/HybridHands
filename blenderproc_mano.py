@@ -29,6 +29,9 @@ def configure_camera_and_lights(objs, world_coords, output_dir):
         [0, 0, -0.383889]
     ]
 
+    top_light_position = [0,0,0.465]
+    bottom_light_position = [0,0,-0.465]
+
     # Randomly select one position
     selected_position = random.choice(light_positions)
 
@@ -36,7 +39,16 @@ def configure_camera_and_lights(objs, world_coords, output_dir):
     light = bproc.types.Light()
     light.set_location(selected_position)
     light.set_energy(10)
-    print(f"Light created at: {selected_position}")
+    
+    top_light = bproc.types.Light()
+    top_light.set_type("AREA")
+    top_light.set_location(top_light_position)
+    top_light.set_energy(0.5)
+
+    bottom_light = bproc.types.Light()
+    bottom_light.set_type("AREA")
+    bottom_light.set_location(bottom_light_position)
+    bottom_light.set_energy(0.5)
 
     # Fixed distance from the object
     radius = 0.5
@@ -128,12 +140,10 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
 
     return objs
 
-
 def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj):
     """
     Saves JSON data including the intrinsic matrix, all vertices, original coordinates from .xyz,
     and additional coordinates from target_indices in camera space.
-
     Parameters:
         world_coords (np.ndarray): 3D world coordinates of the keypoints.
         cam2world_matrix (np.ndarray): 4x4 camera-to-world transformation matrix.
@@ -141,54 +151,51 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
         obj (bproc.object.Object): The BlenderProc object whose vertices will be extracted.
     """
     global iteration_counter
-
+    
     # Get object name and Blender object reference
     obj_name = obj.get_name()
     bpy_obj = bpy.data.objects.get(obj_name)
     if bpy_obj is None:
         raise ValueError(f"Object '{obj_name}' not found in Blender context.")
 
-    # Project 3D keypoints to 2D image coordinates
+    # Get world2cam matrix (inverse of cam2world)
+    world2cam_matrix = np.linalg.inv(cam2world_matrix)
+    
+    # Extract and transform vertices
+    vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
+    vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
+    vertices_camera = (vertices_homogeneous @ world2cam_matrix.T)[:, :3]
+    
+    # Normalize Z values (optional - uncomment if needed)
+    # z_min, z_max = vertices_camera[:, 2].min(), vertices_camera[:, 2].max()
+    # vertices_camera[:, 2] = (vertices_camera[:, 2] - z_min) / (z_max - z_min)
+    
+    # Project points to 2D
     image_coords = bproc.camera.project_points(world_coords)
-
-    # Extract vertices in world coordinates
-    vertices_world = [bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices]
-
-    # Convert vertices_world to NumPy array for further processing
-    vertices_world_np = np.array([list(v) for v in vertices_world])
-
-    # Project vertices to 2D image space (pixel coordinates)
-    vertices_coords = bproc.camera.project_points(vertices_world_np)
-
-    # Transform vertices to camera space and compute Z-depth
-    vertices_homogeneous = np.hstack((vertices_world_np, np.ones((vertices_world_np.shape[0], 1))))
-    vertices_camera = vertices_homogeneous @ np.linalg.inv(cam2world_matrix).T
-    vertices_z_depths = vertices_camera[:, 2]
-
-    # Transform world_coords to camera space
-    world_coords_homo = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))  # Add homogeneous coord
-    xyz_camera = (world_coords_homo @ np.linalg.inv(cam2world_matrix).T)[:, :3]  # Transform to camera space
-
-    # Transform extracted_xyz to camera space
+    vertices_coords = bproc.camera.project_points(vertices_world)
+    
+    # Transform keypoints to camera space
+    world_coords_homo = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
+    xyz_camera = (world_coords_homo @ world2cam_matrix.T)[:, :3]
+    
+    # Handle target indices
     target_indices = [745, 320, 444, 555, 672]
-    extracted_xyz_world = np.array([vertices_world[idx] for idx in target_indices])  # Get in world space
+    extracted_xyz_world = vertices_world[target_indices]
     extracted_xyz_homo = np.hstack((extracted_xyz_world, np.ones((len(extracted_xyz_world), 1))))
-    extracted_xyz_camera = (extracted_xyz_homo @ np.linalg.inv(cam2world_matrix).T)[:, :3]
-
-    # Get the camera's intrinsic matrix
-    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
-
-    # Extract specific vertices' 2D coordinates
+    extracted_xyz_camera = (extracted_xyz_homo @ world2cam_matrix.T)[:, :3]
     extracted_uv = [vertices_coords[idx].tolist() for idx in target_indices]
 
-    # Prepare JSON data
+    # Get camera intrinsics
+    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
+    
+    # Prepare JSON data with explicit type conversion
     json_data = {
         "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + extracted_uv,
-        "xyz": [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in xyz_camera] + 
+        "xyz": [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in xyz_camera] +
                [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in extracted_xyz_camera],
         "hand_type": [1],
         "K": intrinsic_matrix.tolist(),
-        "vertices": [[float(vc[0]), float(vc[1]), float(z)] for vc, z in zip(vertices_world_np.tolist(), vertices_z_depths.tolist())],
+        "vertices": [[float(vc[0]), float(vc[1]), float(vc[2])] for vc in vertices_camera],
         "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
     }
 
@@ -205,10 +212,9 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     output_dir.mkdir(parents=True, exist_ok=True)
     json_filename = f"{iteration_counter:08d}.json"
     json_output_file = output_dir / json_filename
-
     with open(json_output_file, mode='w') as json_file:
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
-
+    
     print(f"Data saved to: {json_output_file}")
 
 
