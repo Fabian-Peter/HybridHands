@@ -9,7 +9,44 @@ import json
 import glob 
 from mathutils import Vector
 
+#CONFIG
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
+    
+LIGHT_POSITIONS = [
+    [0.383889, 0, 0],
+    [0, 0.383889, 0],
+    [0, 0, 0.383889],
+    [-0.383889, 0, 0],
+    [0, -0.383889, 0],
+    [0, 0, -0.383889]
+    ]
+    
+TOP_LIGHT_POSITION = [0, 0, 0.465]
+BOTTOM_LIGHT_POSITION = [0, 0, -0.465]
+ENERGY_SPOT = 10
+ENERGY_AREA = 0.5
+    
+SKIN_TONES = [
+    [0x42/255.0, 0x30/255.0, 0x2E/255.0, 1.0],
+    [0x74/255.0, 0x57/255.0, 0x49/255.0, 1.0],
+    [0x89/255.0, 0x65/255.0, 0x65/255.0, 1.0],
+    [0xB0/255.0, 0x98/255.0, 0x84/255.0, 1.0],
+    [0x89/255.0, 0x65/255.0, 0x5A/255.0, 1.0],
+    [0xF3/255.0, 0xC3/255.0, 0xAD/255.0, 1.0],
+    [0xE3/255.0, 0xA5/255.0, 0x8D/255.0, 1.0],
+    [0xFF/255.0, 0xD7/255.0, 0xBC/255.0, 1.0],
+    [0xE9/255.0, 0xB8/255.0, 0x93/255.0, 1.0]
+    ]
+    
+TARGET_INDICES = [745, 320, 444, 555, 672]
+SELECTED_INDICES = [3, 6, 9, 12, 15]
+REORDER_MAPPING = [
+    0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
+    5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
+]
+
+IMAGE_WIDTH = 256
+IMAGE_HEIGHT = 256
 iteration_counter = 0
 
 
@@ -19,104 +56,66 @@ def configure_camera_and_lights(objs, world_coords, output_dir):
     """
     global iteration_counter
 
-    # Predefined light positions
-    light_positions = [
-        [0.383889, 0, 0],
-        [0, 0.383889, 0],
-        [0, 0, 0.383889],
-        [-0.383889, 0, 0],
-        [0, -0.383889, 0],
-        [0, 0, -0.383889]
-    ]
-
-    top_light_position = [0,0,0.465]
-    bottom_light_position = [0,0,-0.465]
-
     # Randomly select one position
-    selected_position = random.choice(light_positions)
+    selected_position = random.choice(LIGHT_POSITIONS)
 
     # Create and place the light
     light = bproc.types.Light()
     light.set_location(selected_position)
-    light.set_energy(10)
+    light.set_energy(ENERGY_SPOT)
     
     top_light = bproc.types.Light()
     top_light.set_type("AREA")
-    top_light.set_location(top_light_position)
-    top_light.set_energy(0.5)
+    top_light.set_location(TOP_LIGHT_POSITION)
+    top_light.set_energy(ENERGY_AREA)
 
     bottom_light = bproc.types.Light()
     bottom_light.set_type("AREA")
-    bottom_light.set_location(bottom_light_position)
-    bottom_light.set_energy(0.5)
+    bottom_light.set_location(BOTTOM_LIGHT_POSITION)
+    bottom_light.set_energy(ENERGY_AREA)
 
-    # Fixed distance from the object
-    radius = 0.5
+    # Random distance from the object
+    radius = random.uniform(0.35, 0.65)
+   
+    theta = np.random.uniform(0, np.pi / 2) 
+    phi = np.random.uniform(0, 2 * np.pi)
 
-    # Random spherical coordinates for a single pose
-    theta = np.random.uniform(0, np.pi / 2)  # Polar angle (upper hemisphere)
-    phi = np.random.uniform(0, 2 * np.pi)   # Azimuthal angle
-
-    # Spherical to Cartesian conversion
     x = radius * np.sin(theta) * np.cos(phi)
     y = radius * np.sin(theta) * np.sin(phi)
     z = radius * np.cos(theta)
     location = np.array([x, y, z])
 
-    # Compute point of interest
+    # Compute viewport
     poi = bproc.object.compute_poi(objs)
 
-    # Compute rotation matrix
     rotation_matrix = bproc.camera.rotation_from_forward_vec(
         poi - location, 
         inplane_rot=np.random.uniform(*CAMERA_ROTATION_RANGE)
     )
 
-    # Add camera pose
+    # Adding camera
     cam2world_matrix = bproc.math.build_transformation_mat(location, rotation_matrix)
     bproc.camera.add_camera_pose(cam2world_matrix)
 
-    # Save coordinates for the camera pose
     project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, objs[0])
-
-     
-    
 
 
 def clear_scene():
     """Deletes all objects from the current Blender scene."""
-    # Get all objects in the current scene
     all_objects = bpy.data.objects
-    # Loop through all objects and remove them
     for obj in all_objects:
-        # Exclude the camera and lights if you want to keep them
         if obj.type != 'CAMERA':
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
 
-
-
 def setup_material():
     """Sets up a material with specific properties for the hand mesh."""
-    # Define possible skin tones as RGBA values
-    skin_tones = [
-        [0x42 / 255.0, 0x30 / 255.0, 0x2E / 255.0, 1.0],  # 42302E
-        [0x74 / 255.0, 0x57 / 255.0, 0x49 / 255.0, 1.0],  # 745749
-        [0x89 / 255.0, 0x65 / 255.0, 0x65 / 255.0, 1.0],  # 896653
-        [0xB0 / 255.0, 0x98 / 255.0, 0x84 / 255.0, 1.0],  # B09884
-        [0x89 / 255.0, 0x65 / 255.0, 0x5A / 255.0, 1.0],  # 89655A
-        [0xF3 / 255.0, 0xC3 / 255.0, 0xAD / 255.0, 1.0],  # F3C3AD
-        [0xE3 / 255.0, 0xA5 / 255.0, 0x8D / 255.0, 1.0],  # E3A58D
-        [0xFF / 255.0, 0xD7 / 255.0, 0xBC / 255.0, 1.0],  # FFD7BC
-        [0xE9 / 255.0, 0xB8 / 255.0, 0x93 / 255.0, 1.0]  # E9B893
-    ]
-    # Randomly select a skin tone
-    random_skin_tone = random.choice(skin_tones)
+    random_skin_tone = random.choice(SKIN_TONES)
 
     # Create and set up the material
     material = bproc.material.create('Hand_Material')
-    material.set_principled_shader_value("Base Color", random_skin_tone)  # Random skin color
+    material.set_principled_shader_value("Base Color", random_skin_tone)
     material.set_principled_shader_value("Roughness", 0.8)
     material.set_principled_shader_value("Specular", 0.5)
     return material
@@ -126,16 +125,17 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
     objs = bproc.loader.load_obj(file_path_obj)
     for obj in objs:
         obj.enable_rigidbody(active=True, collision_shape='MESH')
+        #Somehow Object initially loaded with 90° rotation, reset
         obj.set_rotation_euler([0, 0, 0])
 
         # Update the world matrix after setting the rotation
-        bpy_obj = obj.blender_obj  # Get the Blender object corresponding to the bproc object
-        bpy.context.view_layer.update()  # Force the update of the scene
-        bpy_obj.matrix_world = bpy_obj.matrix_local  # Ensure the world matrix reflects the local transformation
+        bpy_obj = obj.blender_obj  
+        bpy.context.view_layer.update() 
+        bpy_obj.matrix_world = bpy_obj.matrix_local  
 
-    hand_mesh = objs[0]  # Assuming the hand mesh is the first object loaded
+    hand_mesh = objs[0] 
     if len(hand_mesh.blender_obj.data.materials) == 0:
-        hand_mesh.blender_obj.data.materials.append(None)  # Create an empty material slot
+        hand_mesh.blender_obj.data.materials.append(None) 
     hand_mesh.set_material(0, material)
 
     return objs
@@ -152,7 +152,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     """
     global iteration_counter
     
-    # Get object name and Blender object reference
     obj_name = obj.get_name()
     bpy_obj = bpy.data.objects.get(obj_name)
     if bpy_obj is None:
@@ -165,11 +164,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
     vertices_homogeneous = np.hstack((vertices_world, np.ones((vertices_world.shape[0], 1))))
     vertices_camera = (vertices_homogeneous @ world2cam_matrix.T)[:, :3]
-    
-    # Normalize Z values (optional - uncomment if needed)
-    # z_min, z_max = vertices_camera[:, 2].min(), vertices_camera[:, 2].max()
-    # vertices_camera[:, 2] = (vertices_camera[:, 2] - z_min) / (z_max - z_min)
-    
+
     # Project points to 2D
     image_coords = bproc.camera.project_points(world_coords)
     vertices_coords = bproc.camera.project_points(vertices_world)
@@ -178,14 +173,16 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
     world_coords_homo = np.hstack((world_coords, np.ones((world_coords.shape[0], 1))))
     xyz_camera = (world_coords_homo @ world2cam_matrix.T)[:, :3]
     
-    # Handle target indices
-    target_indices = [745, 320, 444, 555, 672]
-    extracted_xyz_world = vertices_world[target_indices]
+    #Add fingertips (target indices) to xyz and uv as 17 - 21 keypoints
+    extracted_xyz_world = vertices_world[TARGET_INDICES]
+
+    #create Spheres at extracted xyz world positions:
+    create_spheres(extracted_xyz_world)
+
     extracted_xyz_homo = np.hstack((extracted_xyz_world, np.ones((len(extracted_xyz_world), 1))))
     extracted_xyz_camera = (extracted_xyz_homo @ world2cam_matrix.T)[:, :3]
-    extracted_uv = [vertices_coords[idx].tolist() for idx in target_indices]
+    extracted_uv = [vertices_coords[idx].tolist() for idx in TARGET_INDICES]
 
-    # Get camera intrinsics
     intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
     
     # Prepare JSON data with explicit type conversion
@@ -199,13 +196,9 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, output_dir, obj
         "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
     }
 
-    # Reorder the uv and xyz lists
-    reorder_mapping = [
-        0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
-        5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
-    ]
-    json_data["uv"] = [json_data["uv"][i] for i in reorder_mapping]
-    json_data["xyz"] = [json_data["xyz"][i] for i in reorder_mapping]
+    # Reorder the uv and xyz lists to fit mano annotation
+    json_data["uv"] = [json_data["uv"][i] for i in REORDER_MAPPING]
+    json_data["xyz"] = [json_data["xyz"][i] for i in REORDER_MAPPING]
 
     # Save JSON file
     output_dir = Path(output_dir)
@@ -227,30 +220,19 @@ def extract_all_coordinates(file_path_num):
         for i in range(0, len(coords_list), 3):
             x, y, z = coords_list[i:i + 3]
             all_coordinates.append([x, y, z])
-    
 
-     # Extract coordinates at positions 3, 6, 9, 12, and 15 (1-based index)
-    selected_indices = [3, 6, 9, 12, 15]
-    extracted_coordinates = [all_coordinates[i] for i in selected_indices if i - 1 < len(all_coordinates)]
-    
-
-    #create_spheres(extracted_coordinates)
-
-    # Print the extracted coordinates
-    print(f"Extracted Coordinates at positions {selected_indices}: {extracted_coordinates}")
-    
     return all_coordinates
 
-'''
+
 #Sphere Creation
 def create_spheres(coordinates):
+    print("begin sphere creation")
     spheres = []
     for coord in coordinates:
         sphere = bproc.object.create_primitive('SPHERE', scale=[0.004, 0.004, 0.004])
         sphere.enable_rigidbody(active=True, collision_shape='SPHERE')
-        offset_coord = [coord[0]-0.012, coord[1], coord[2]]  # Offset to place on mesh
+        offset_coord = [coord[0]-0.004, coord[1], coord[2]]  # Offset to place on mesh
         sphere.set_location(offset_coord)
-        print("created Sphere")
         # Create a unique material for the sphere
         mat_marker = bproc.material.create(f"MarkerMaterial_{coord}")
         grey_col = 1.0
@@ -266,7 +248,7 @@ def create_spheres(coordinates):
         sphere.add_material(mat_marker)
 
         spheres.append(sphere)
-'''
+
 
 def render_and_save(output_dir):
     """
