@@ -7,7 +7,7 @@ This project represents HybridHands, a pipeline designed for generating 2D train
 
 Anatomically accurate random generated hand poses are rendered through BlenderProc, which then introduces variability by applying random camera angles, orientations, lighting setups, and background generation (WIP). This ensures the creation of a robust and diverse dataset for training hand pose estimation models.
 
-#Hand model based on Nimble, as well as MANO
+# Hand model based on Nimble, as well as MANO
 
 ![](https://liyuwei.cc/proj/img/nimble_teaser.jpg)
 
