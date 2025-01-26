@@ -1,11 +1,13 @@
 HybridHands - Generating hand pose estimation data using the NIMBLE model and blenderproc pipeline
 ========
 
-
-TODO Write stuff
-
 assets available under https://drive.google.com/drive/folders/12yMqqaYVs83P4lpWkjuobIjd--9erchv?usp=drive_link
 
+This project represents HybridHands, a pipeline designed for generating 2D training images for hand pose estimation. The pipeline utilizes both the NIMBLE and MANO hand models to create a scalable dataset. Alongside the images, it generates .json annotations that are fully compatible with the FreiHAND dataset format.
+
+Anatomically accurate random generated hand poses are rendered through BlenderProc, which then introduces variability by applying random camera angles, orientations, lighting setups, and background generation (WIP). This ensures the creation of a robust and diverse dataset for training hand pose estimation models.
+
+#Hand model based on Nimble, as well as MANO
 
 ![](https://liyuwei.cc/proj/img/nimble_teaser.jpg)
 
