@@ -45,8 +45,8 @@ REORDER_MAPPING = [
     5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
 ]
 
-IMAGE_WIDTH = 256
-IMAGE_HEIGHT = 256
+IMAGE_WIDTH = 224
+IMAGE_HEIGHT = 224
 iteration_counter = 0
 
 POSE_PATH = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
@@ -145,6 +145,15 @@ def load_and_prepare_hand_mesh(file_path_obj, material):
 
     return objs
 
+def generate_freihand_k_matrix():
+    """Generate K matrix with FreiHAND-style variations"""
+    base_focal = np.random.uniform(300, 600)
+    return np.array([
+        [base_focal * np.random.uniform(0.98, 1.02), 0, 112],
+        [0, base_focal * np.random.uniform(0.98, 1.02), 112],
+        [0, 0, 1]
+    ])
+
 def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     """
     Saves JSON data including the intrinsic matrix, all vertices, original coordinates from .xyz,
@@ -186,14 +195,20 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     extracted_xyz_camera = (extracted_xyz_homo @ world2cam_matrix.T)[:, :3]
     extracted_uv = [vertices_coords[idx].tolist() for idx in TARGET_INDICES]
 
-    intrinsic_matrix = bproc.camera.get_intrinsics_as_K_matrix()
+    intrinsic_matrix = generate_freihand_k_matrix()
+    bproc.camera.set_intrinsics_from_K_matrix(
+        intrinsic_matrix, 
+        IMAGE_WIDTH, 
+        IMAGE_HEIGHT
+    )
+    print(intrinsic_matrix)
     
     # Prepare JSON data with explicit type conversion
     json_data = {
         "uv": [[float(ic[0]), float(ic[1])] for ic in image_coords] + extracted_uv,
         "xyz": [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in xyz_camera] +
                [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in extracted_xyz_camera],
-        "hand_type": [1],
+        "hand_type": 1,
         "K": intrinsic_matrix.tolist(),
         "vertices": [[float(vc[0]), float(vc[1]), float(vc[2])] for vc in vertices_camera],
         "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
@@ -202,6 +217,9 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     # Reorder the uv and xyz lists to fit mano annotation
     json_data["uv"] = [json_data["uv"][i] for i in REORDER_MAPPING]
     json_data["xyz"] = [json_data["xyz"][i] for i in REORDER_MAPPING]
+
+    json_data["xyz"] = convert_blender_to_freihand(json_data["xyz"]).tolist()
+    json_data["vertices"] = convert_blender_to_freihand(vertices_camera).tolist()
 
     # Save JSON file
     marker_output_dir = Path(MARKER_OUTPUT_DIR)
@@ -226,7 +244,12 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     
     return extracted_xyz_world
 
-    
+def convert_blender_to_freihand(xyz_blender):
+    # Convert from Blender (X, Y, Z) to OpenCV (X, -Y, -Z)
+    xyz_freihand = np.array(xyz_blender, dtype=np.float32)
+    xyz_freihand[:, 1] *= -1  # Flip Y for OpenCV's downward Y-axis
+    xyz_freihand[:, 2] *= -1  # Flip Z for OpenCV's forward direction
+    return xyz_freihand
 
 def extract_all_coordinates(file_path_num):
     """Extracts all 3D coordinates from the given XYZ file."""
@@ -320,9 +343,9 @@ def main():
 
         render_and_save(RGB_OUTPUT_DIR)
 
-        create_spheres(sphere_locations)
+        #create_spheres(sphere_locations)
 
-        render_and_save(MARKER_OUTPUT_DIR)
+        #render_and_save(MARKER_OUTPUT_DIR)
 
         # Increment the counter after saving both files
         iteration_counter += 1

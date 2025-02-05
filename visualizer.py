@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 
 # Directory paths
-output_dir = './output/myHAND/training/rgb'
+output_dir = './output/myMarkerHAND/training/rgb'
 
 # Loop through all files in the directory
 for i in range(50):  # Adjust the range as needed
