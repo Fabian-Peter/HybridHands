@@ -8,6 +8,8 @@ import random
 import json
 import glob 
 from mathutils import Vector
+import tempfile
+import shutil
 
 #CONFIG
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
@@ -51,8 +53,8 @@ iteration_counter = 0
 
 POSE_PATH = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
 
-MARKER_OUTPUT_DIR = "output/myMarkerHAND/evaluation/rgb/"
-RGB_OUTPUT_DIR = "output/myRGBHAND/evaluation/rgb/"
+MARKER_OUTPUT_DIR = "output/myMarkerHAND/training/rgb/"
+RGB_OUTPUT_DIR = "output/myRGBHAND/training/rgb/"
 
 def configure_camera_and_lights(objs):
     """
@@ -154,6 +156,29 @@ def generate_freihand_k_matrix():
         [0, 0, 1]
     ])
 
+def compute_visibility(vertices_3d, K, depth_map, threshold=0.05):
+    # Project 3D points to 2D
+    projected_uv = bproc.camera.project_points(vertices_3d)  # shape [N, 2]
+    # Also get the projected depth (you might compute this by converting 3D points into camera coordinates)
+    # Here we assume that 'project_points' gives a depth component or you compute it:
+    projected_depth = vertices_3d[:, 2]  # This is a simplification; in practice, you transform the points.
+    
+    visibility = []
+    H, W = depth_map.shape
+    for i, (uv, d_proj) in enumerate(zip(projected_uv, projected_depth)):
+        u, v = int(round(uv[0])), int(round(uv[1]))
+        # Check if the projection is within image bounds:
+        if u < 0 or u >= W or v < 0 or v >= H:
+            visibility.append(0)
+            continue
+        d_rendered = depth_map[v, u]
+        # If the difference is small relative to the depth (or within an absolute threshold), mark visible.
+        if abs(d_proj - d_rendered) / (d_proj + 1e-8) < threshold:
+            visibility.append(1)
+        else:
+            visibility.append(0)
+    return np.array(visibility)
+
 def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     """
     Saves JSON data including the intrinsic matrix, all vertices, original coordinates from .xyz,
@@ -201,7 +226,19 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         IMAGE_WIDTH, 
         IMAGE_HEIGHT
     )
-    print(intrinsic_matrix)
+
+    data = bproc.renderer.render()
+    if isinstance(data["depth"], list):
+        if len(data["depth"]) == 1:
+            depth_map = np.array(data["depth"][0])
+        else:
+            # If multiple depth maps are returned, stack them along a new axis.
+            depth_map = np.stack(data["depth"], axis=0)
+    else:
+        depth_map = data["depth"]
+
+    # Compute visibility for the markers (fingertips)
+    visibility_flags = compute_visibility(extracted_xyz_world, intrinsic_matrix, depth_map, threshold=0.05)
     
     # Prepare JSON data with explicit type conversion
     json_data = {
@@ -209,9 +246,10 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         "xyz": [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in xyz_camera] +
                [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in extracted_xyz_camera],
         "hand_type": 1,
+        "marker_visibility": visibility_flags.tolist(),
         "K": intrinsic_matrix.tolist(),
         "vertices": [[float(vc[0]), float(vc[1]), float(vc[2])] for vc in vertices_camera],
-        "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
+        "image_path": f"/training/rgb/{iteration_counter:08d}.jpg"
     }
 
     # Reorder the uv and xyz lists to fit mano annotation
@@ -235,13 +273,14 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
     
     print(f"Data saved to: {rgb_json_output_file}")
-
+    #marker json output
+    '''
     marker_json_output_file = marker_output_dir / json_filename
     with open(marker_json_output_file, mode='w') as json_file:
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
     
     print(f"Data saved to: {marker_json_output_file}")
-    
+    '''
     return extracted_xyz_world
 
 def convert_blender_to_freihand(xyz_blender):
@@ -309,11 +348,23 @@ def render_and_save(output_dir):
     print(f"HDF5 saved to: {hdf5_output_file}")
 
 
+def clear_temp_directory():
+    """Removes directories starting with 'blender_proc_' in the system temporary directory."""
+    temp_dir = Path(tempfile.gettempdir())
+    # Find all directories with a name that starts with "blender_proc_"
+    for temp_subdir in temp_dir.glob("blender_proc_*"):
+        try:
+            shutil.rmtree(temp_subdir)
+            print(f"Removed temporary directory: {temp_subdir}")
+        except Exception as e:
+            print(f"Failed to remove {temp_subdir}: {e}")
+
 def main():
 
     global iteration_counter
  
     bproc.init()
+    bproc.renderer.enable_depth_output(activate_antialiasing=False)
     bproc.camera.set_resolution(IMAGE_HEIGHT, IMAGE_WIDTH)
    
     # Get all .obj and .xyz files sorted by their index
@@ -339,19 +390,19 @@ def main():
 
         sphere_locations = project_and_save_coordinates(world_coords, matrix, objs[0])
 
-        print(sphere_locations)
-
         render_and_save(RGB_OUTPUT_DIR)
+        #marker generation and rendering
+        '''
+        create_spheres(sphere_locations)
 
-        #create_spheres(sphere_locations)
-
-        #render_and_save(MARKER_OUTPUT_DIR)
-
+        render_and_save(MARKER_OUTPUT_DIR)
+        '''
         # Increment the counter after saving both files
         iteration_counter += 1
 
         bproc.utility.reset_keyframes()
         clear_scene()
+        clear_temp_directory()
 
     print("Processing completed!")
 
