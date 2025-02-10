@@ -10,6 +10,7 @@ import glob
 from mathutils import Vector
 import tempfile
 import shutil
+import mathutils
 
 #CONFIG
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
@@ -53,8 +54,8 @@ iteration_counter = 0
 
 POSE_PATH = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
 
-MARKER_OUTPUT_DIR = "output/myMarkerHAND/training/rgb/"
-RGB_OUTPUT_DIR = "output/myRGBHAND/training/rgb/"
+MARKER_OUTPUT_DIR = "output/myMarkerHAND/evaluation/rgb/"
+RGB_OUTPUT_DIR = "output/myRGBHAND/evaluation/rgb/"
 
 def configure_camera_and_lights(objs):
     """
@@ -156,28 +157,42 @@ def generate_freihand_k_matrix():
         [0, 0, 1]
     ])
 
-def compute_visibility(vertices_3d, K, depth_map, threshold=0.05):
-    # Project 3D points to 2D
-    projected_uv = bproc.camera.project_points(vertices_3d)  # shape [N, 2]
-    # Also get the projected depth (you might compute this by converting 3D points into camera coordinates)
-    # Here we assume that 'project_points' gives a depth component or you compute it:
-    projected_depth = vertices_3d[:, 2]  # This is a simplification; in practice, you transform the points.
+def is_vertex_visible(camera, vertex, obj, threshold=0.01):
+    """
+    Checks if a given vertex is visible from the camera by ray casting.
+
+    Args:
+        camera (bpy.types.Object): The camera object.
+        vertex (mathutils.Vector): The 3D location of the vertex in world coordinates.
+        obj (bpy.types.Object): The object to test against.
+        threshold (float): Maximum allowable distance between the hit point and the vertex.
+
+    Returns:
+        bool: True if the vertex is visible, False otherwise.
+    """
+    scene = bpy.context.scene
+    # Get the depsgraph from the current context.
+    depsgraph = bpy.context.evaluated_depsgraph_get()
     
-    visibility = []
-    H, W = depth_map.shape
-    for i, (uv, d_proj) in enumerate(zip(projected_uv, projected_depth)):
-        u, v = int(round(uv[0])), int(round(uv[1]))
-        # Check if the projection is within image bounds:
-        if u < 0 or u >= W or v < 0 or v >= H:
-            visibility.append(0)
-            continue
-        d_rendered = depth_map[v, u]
-        # If the difference is small relative to the depth (or within an absolute threshold), mark visible.
-        if abs(d_proj - d_rendered) / (d_proj + 1e-8) < threshold:
-            visibility.append(1)
-        else:
-            visibility.append(0)
-    return np.array(visibility)
+    # Starting point: the camera location
+    origin = camera.location
+    # Direction from the camera to the vertex (normalized)
+    direction = (vertex - origin).normalized()
+    
+    # Perform a ray cast from the camera in the given direction.
+    hit, location, normal, index, hit_obj, matrix = scene.ray_cast(depsgraph, origin, direction)
+    
+    if not hit:
+        # No hit means nothing was intersected; treat as not visible.
+        return False
+    if hit_obj != obj:
+        # If the ray hits a different object, the vertex is occluded.
+        return False
+    # Check if the hit location is close enough to the vertex.
+    if (location - vertex).length < threshold:
+        return True
+    else:
+        return False
 
 def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     """
@@ -238,7 +253,12 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         depth_map = data["depth"]
 
     # Compute visibility for the markers (fingertips)
-    visibility_flags = compute_visibility(extracted_xyz_world, intrinsic_matrix, depth_map, threshold=0.05)
+    camera = bpy.data.objects['Camera']
+    marker_vertices = [mathutils.Vector(v) for v in extracted_xyz_world]
+    marker_visibility = []
+    for vertex in marker_vertices:  # marker_vertices should be a list of mathutils.Vector objects.
+        visible = is_vertex_visible(camera, vertex, bpy_obj, threshold=0.01)
+        marker_visibility.append(1 if visible else 0)
     
     # Prepare JSON data with explicit type conversion
     json_data = {
@@ -246,10 +266,10 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         "xyz": [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in xyz_camera] +
                [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in extracted_xyz_camera],
         "hand_type": 1,
-        "marker_visibility": visibility_flags.tolist(),
+        "marker_visibility": marker_visibility,
         "K": intrinsic_matrix.tolist(),
         "vertices": [[float(vc[0]), float(vc[1]), float(vc[2])] for vc in vertices_camera],
-        "image_path": f"/training/rgb/{iteration_counter:08d}.jpg"
+        "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
     }
 
     # Reorder the uv and xyz lists to fit mano annotation
