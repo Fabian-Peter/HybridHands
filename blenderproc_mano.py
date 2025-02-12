@@ -11,6 +11,7 @@ from mathutils import Vector
 import tempfile
 import shutil
 import mathutils
+import imageio
 
 #CONFIG
 CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
@@ -54,8 +55,8 @@ iteration_counter = 0
 
 POSE_PATH = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
 
-MARKER_OUTPUT_DIR = "output/myMarkerHAND/evaluation/rgb/"
-RGB_OUTPUT_DIR = "output/myRGBHAND/evaluation/rgb/"
+MARKER_OUTPUT_DIR = "output/myMarkerHAND/training/rgb/"
+RGB_OUTPUT_DIR = "output/myRGBHAND/training/rgb/"
 
 def configure_camera_and_lights(objs):
     """
@@ -157,7 +158,7 @@ def generate_freihand_k_matrix():
         [0, 0, 1]
     ])
 
-def is_vertex_visible(camera, vertex, obj, threshold=0.01):
+def is_vertex_visible(camera, vertex, obj, threshold=0.2):
     """
     Checks if a given vertex is visible from the camera by ray casting.
 
@@ -284,7 +285,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         "distance": normalized_distances,
         "K": intrinsic_matrix.tolist(),
         "vertices": [[float(vc[0]), float(vc[1]), float(vc[2])] for vc in vertices_camera],
-        "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
+        "image_path": f"/training/rgb/{iteration_counter:08d}.jpg"
     }
 
     # Reorder the uv and xyz lists to fit mano annotation
@@ -368,19 +369,14 @@ def create_spheres(coordinates):
 
 
 def render_and_save(output_dir):
-    """
-    Renders the current scene and saves the output to an HDF5 file.
-    """
-    global iteration_counter  # Access the global iteration_counter
-
-    # Generate filename with zero-padded counter
-    hdf5_filename = f"{iteration_counter:08d}.hdf5"
-    hdf5_output_file = Path(output_dir) 
-  
+    global iteration_counter
     data = bproc.renderer.render()
-    bproc.writer.write_hdf5(output_dir, data, append_to_existing_output=True)
+    colors = data["colors"] 
 
-    print(f"HDF5 saved to: {hdf5_output_file}")
+    for i, color_img in enumerate(colors):
+        file_path = os.path.join(output_dir, f"{iteration_counter:08d}.png")
+        imageio.imwrite(file_path, color_img)
+    print(f"PNG images saved to: {output_dir}")
 
 
 def clear_temp_directory():
@@ -399,6 +395,7 @@ def main():
     global iteration_counter
  
     bproc.init()
+    bproc.renderer.set_output_format(enable_transparency=True)
     bproc.renderer.enable_depth_output(activate_antialiasing=False)
     bproc.camera.set_resolution(IMAGE_HEIGHT, IMAGE_WIDTH)
    
