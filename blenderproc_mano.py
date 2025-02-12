@@ -259,6 +259,20 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     for vertex in marker_vertices:  # marker_vertices should be a list of mathutils.Vector objects.
         visible = is_vertex_visible(camera, vertex, bpy_obj, threshold=0.01)
         marker_visibility.append(1 if visible else 0)
+
+    # ===== Compute and normalize the distance for each marker =====
+    # Get the camera world location (as a NumPy array)
+    cam_loc = np.array(camera.location)
+    # Compute the Euclidean distance from each marker (in world space) to the camera
+    marker_distances = np.linalg.norm(extracted_xyz_world - cam_loc, axis=1)
+    # Normalize: 1 for the closest marker and 0 for the furthest marker in this image.
+    d_min = marker_distances.min()
+    d_max = marker_distances.max()
+    if d_max - d_min < 1e-6:
+        normalized_distances = [1.0 for _ in marker_distances]  # All markers are at nearly the same distance.
+    else:
+        normalized_distances = ((d_max - marker_distances) / (d_max - d_min)).tolist()
+    # ========================================================================
     
     # Prepare JSON data with explicit type conversion
     json_data = {
@@ -267,6 +281,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
                [[float(coord[0]), float(coord[1]), float(coord[2])] for coord in extracted_xyz_camera],
         "hand_type": 1,
         "marker_visibility": marker_visibility,
+        "distance": normalized_distances,
         "K": intrinsic_matrix.tolist(),
         "vertices": [[float(vc[0]), float(vc[1]), float(vc[2])] for vc in vertices_camera],
         "image_path": f"/evaluation/rgb/{iteration_counter:08d}.jpg"
