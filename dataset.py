@@ -2,7 +2,7 @@ import json
 
 # Define the base path and number of files
 base_path = "/data/myHAND/training/rgb/"
-num_files = 4092
+num_files = 15739
 
 # Generate the list of file paths
 file_paths = [f"{base_path}{i:08d}.jpg" for i in range(num_files)]

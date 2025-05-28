@@ -126,7 +126,7 @@ def setup_material():
     material = bproc.material.create('Hand_Material')
     material.set_principled_shader_value("Base Color", random_skin_tone)
     material.set_principled_shader_value("Roughness", 0.8)
-    material.set_principled_shader_value("Specular", 0.5)
+    material.set_principled_shader_value("Specular IOR Level", 0.5)
     return material
 
 def load_and_prepare_hand_mesh(file_path_obj, material):
@@ -214,6 +214,14 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
 
     # Get world2cam matrix (inverse of cam2world)
     world2cam_matrix = np.linalg.inv(cam2world_matrix)
+
+    intrinsic_matrix = generate_freihand_k_matrix()
+    bproc.camera.set_intrinsics_from_K_matrix(
+        intrinsic_matrix, 
+        IMAGE_WIDTH, 
+        IMAGE_HEIGHT
+    )
+
     
     # Extract and transform vertices
     vertices_world = np.array([bpy_obj.matrix_world @ v.co for v in bpy_obj.data.vertices])
@@ -236,13 +244,7 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     extracted_xyz_camera = (extracted_xyz_homo @ world2cam_matrix.T)[:, :3]
     extracted_uv = [vertices_coords[idx].tolist() for idx in TARGET_INDICES]
 
-    intrinsic_matrix = generate_freihand_k_matrix()
-    bproc.camera.set_intrinsics_from_K_matrix(
-        intrinsic_matrix, 
-        IMAGE_WIDTH, 
-        IMAGE_HEIGHT
-    )
-
+    
     data = bproc.renderer.render()
     if isinstance(data["depth"], list):
         if len(data["depth"]) == 1:
@@ -355,7 +357,7 @@ def create_spheres(coordinates):
         mat_marker.set_principled_shader_value("Subsurface", 0.2)
         mat_marker.set_principled_shader_value("Base Color", [grey_col, grey_col, grey_col, 1])
         mat_marker.set_principled_shader_value("Roughness", np.random.uniform(0, 0.5))
-        mat_marker.set_principled_shader_value("Specular", np.random.uniform(0.3, 1.0))
+        mat_marker.set_principled_shader_value("Specular IOR Level", np.random.uniform(0.3, 1.0))
         mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0.5))
         
         sphere.enable_rigidbody(True, mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)

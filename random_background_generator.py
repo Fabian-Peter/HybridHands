@@ -6,7 +6,7 @@ from PIL import Image
 
 #creates composit jpg of randomly selected image from background folders and rendered hand pose 
 def main():
-    input_images_folder = "./output/myRGBHAND/evaluation/rgb"   
+    input_images_folder = "./output/myRGBHAND/training/rgb"   
     background_folders = [
         "./background_images/dining_room",
         "./background_images/living_room",
