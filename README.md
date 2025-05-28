@@ -2,6 +2,8 @@
 
 This repository is part of a master thesis "HybridHands", focused on generating synthetic hand pose datasets. It contains scripts for parameterized hand pose generation and rendering pipeline using MANO and NIMBLE hand models.
 
+![Example Output](blenderprocscripts_lib/example.PNG)
+
 ## Installation
 
 1. Clone this repository:
