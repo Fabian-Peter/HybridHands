@@ -7,13 +7,14 @@ import numpy as np
 import csv
 import os
 import sys
+
 #costum package import
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 from blenderprocscripts_lib.scene_creation import SceneParameters
 
 
-# VARIABLES
+# config
 SPHERE_RADIUS = 3.5
 LIGHT_ENERGY = 500000
 LIGHT_RADIUS = 100
@@ -43,9 +44,9 @@ def load_materials():
     """Loads and applies textures to the materials in the scene."""
     materials = bproc.material.collect_all()
     for mat in materials:
-        normal = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_normal.png")
-        spec = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_spec.png")
-        dif = bpy.data.images.load(r"C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\rand_0_diffuse.png")
+        normal = bpy.data.images.load(r"yourpath\\HybridHands\\output\\poses\\rand_0_normal.png")
+        spec = bpy.data.images.load(r"yourpath\\HybridHands\\output\\poses\\rand_0_spec.png")
+        dif = bpy.data.images.load(r"yourpath\\HybridHands\\output\\poses\\rand_0_diffuse.png")
         mat.set_principled_shader_value("Base Color", dif)
         mat.set_principled_shader_value("Normal", normal)
         mat.set_principled_shader_value("Specular", spec)
@@ -257,7 +258,7 @@ def main():
     args = parse_arguments()
     bproc.init()
 
-    base_path = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\NIMBLE'  # Base path for your files
+    base_path = 'yourpath\\HybridHands\\output\\poses\\NIMBLE'  # Base path for your files
     num_iterations = 10  # Number of files to process
 
     for index in range(num_iterations):

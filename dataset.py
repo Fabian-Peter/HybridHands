@@ -1,13 +1,14 @@
+'''
+Quick script to generate dataset.json, an a json that contains the path for all images
+'''
 import json
 
-# Define the base path and number of files
+# base path
 base_path = "/data/myHAND/training/rgb/"
+#number of training images
 num_files = 15739
 
-# Generate the list of file paths
 file_paths = [f"{base_path}{i:08d}.jpg" for i in range(num_files)]
-
-# Define the output JSON file path
 output_file = "./train.json"
 
 # Write the paths to the JSON file

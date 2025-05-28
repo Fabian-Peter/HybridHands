@@ -13,9 +13,28 @@ import shutil
 import mathutils
 import imageio
 
-#CONFIG
-CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation
-    
+#config
+CAMERA_ROTATION_RANGE = (-0.7854, 0.7854)  # Range for in-plane rotation   
+TOP_LIGHT_POSITION = [0, 0, 0.465]
+BOTTOM_LIGHT_POSITION = [0, 0, -0.465]
+ENERGY_SPOT = 7.5
+ENERGY_AREA = 0.5 
+#Vertices indices at the fingertips, additional xyz location next to joint xyzs
+TARGET_INDICES = [745, 320, 444, 555, 672]
+#Corresponding to fingertip xyz keypoints. If other markers are to be added, change here
+SELECTED_INDICES = [3, 6, 9, 12, 15]
+#Reorder indices to MANO standard
+REORDER_MAPPING = [
+    0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
+    5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
+]
+IMAGE_WIDTH = 224
+IMAGE_HEIGHT = 224
+iteration_counter = 0
+#Path
+POSE_PATH = 'change/to/your/path'
+#If creating eval dataset, change to MyHAND/eval/rgb/
+RGB_OUTPUT_DIR = "output/MyHAND/training/rgb/"
 LIGHT_POSITIONS = [
     [0.383889, 0, 0],
     [0, 0.383889, 0],
@@ -23,13 +42,7 @@ LIGHT_POSITIONS = [
     [-0.383889, 0, 0],
     [0, -0.383889, 0],
     [0, 0, -0.383889]
-    ]
-    
-TOP_LIGHT_POSITION = [0, 0, 0.465]
-BOTTOM_LIGHT_POSITION = [0, 0, -0.465]
-ENERGY_SPOT = 7.5
-ENERGY_AREA = 0.5
-    
+    ]  
 SKIN_TONES = [
     [0x42/255.0, 0x30/255.0, 0x2E/255.0, 1.0],
     [0x74/255.0, 0x57/255.0, 0x49/255.0, 1.0],
@@ -41,32 +54,13 @@ SKIN_TONES = [
     [0xFF/255.0, 0xD7/255.0, 0xBC/255.0, 1.0],
     [0xE9/255.0, 0xB8/255.0, 0x93/255.0, 1.0]
     ]
-    
-TARGET_INDICES = [745, 320, 444, 555, 672]
-SELECTED_INDICES = [3, 6, 9, 12, 15]
-REORDER_MAPPING = [
-    0, 13, 14, 15, 16, 1, 2, 3, 17, 4,
-    5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20
-]
-
-IMAGE_WIDTH = 224
-IMAGE_HEIGHT = 224
-iteration_counter = 0
-
-POSE_PATH = 'C:\\Users\\fabia\\Desktop\\HybridHands\\output\\poses\\mano'
-
-MARKER_OUTPUT_DIR = "output/myMarkerHAND/training/rgb/"
-RGB_OUTPUT_DIR = "output/myRGBHAND/training/rgb/"
 
 def configure_camera_and_lights(objs):
     """
     Sets up a single camera and light, projects coordinates, and saves the JSON file.
     """
-
-    # Randomly select one position
     selected_position = random.choice(LIGHT_POSITIONS)
 
-    # Create and place the light
     light = bproc.types.Light()
     light.set_location(selected_position)
     light.set_energy(ENERGY_SPOT)
@@ -81,7 +75,7 @@ def configure_camera_and_lights(objs):
     bottom_light.set_location(BOTTOM_LIGHT_POSITION)
     bottom_light.set_energy(ENERGY_AREA)
 
-    # Random distance from the object
+    #Random radius in range
     radius = random.uniform(0.35, 0.65)
    
     theta = np.random.uniform(0, np.pi / 2) 
@@ -172,7 +166,7 @@ def is_vertex_visible(camera, vertex, obj, threshold=0.2):
         bool: True if the vertex is visible, False otherwise.
     """
     scene = bpy.context.scene
-    # Get the depsgraph from the current context.
+    # Get the depsgraph from the current context
     depsgraph = bpy.context.evaluated_depsgraph_get()
     
     # Starting point: the camera location
@@ -184,7 +178,7 @@ def is_vertex_visible(camera, vertex, obj, threshold=0.2):
     hit, location, normal, index, hit_obj, matrix = scene.ray_cast(depsgraph, origin, direction)
     
     if not hit:
-        # No hit means nothing was intersected; treat as not visible.
+        # No hit means nothing was intersected; treat as marker not visible.
         return False
     if hit_obj != obj:
         # If the ray hits a different object, the vertex is occluded.
@@ -238,7 +232,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     
     #Add fingertips (target indices) to xyz and uv as 17 - 21 keypoints
     extracted_xyz_world = vertices_world[TARGET_INDICES]
-
 
     extracted_xyz_homo = np.hstack((extracted_xyz_world, np.ones((len(extracted_xyz_world), 1))))
     extracted_xyz_camera = (extracted_xyz_homo @ world2cam_matrix.T)[:, :3]
@@ -298,10 +291,8 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
     json_data["vertices"] = convert_blender_to_freihand(vertices_camera).tolist()
 
     # Save JSON file
-    marker_output_dir = Path(MARKER_OUTPUT_DIR)
     rgb_output_dir = Path(RGB_OUTPUT_DIR)
 
-    marker_output_dir.mkdir(parents=True, exist_ok=True)
     rgb_output_dir.mkdir(parents=True, exist_ok=True)
 
     json_filename = f"{iteration_counter:08d}.json"
@@ -311,14 +302,6 @@ def project_and_save_coordinates(world_coords, cam2world_matrix, obj):
         json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
     
     print(f"Data saved to: {rgb_json_output_file}")
-    #marker json output
-    '''
-    marker_json_output_file = marker_output_dir / json_filename
-    with open(marker_json_output_file, mode='w') as json_file:
-        json.dump(json_data, json_file, separators=(', ', ': '), indent=None)
-    
-    print(f"Data saved to: {marker_json_output_file}")
-    '''
     return extracted_xyz_world
 
 def convert_blender_to_freihand(xyz_blender):
@@ -339,35 +322,6 @@ def extract_all_coordinates(file_path_num):
             all_coordinates.append([x, y, z])
 
     return all_coordinates
-
-
-#Sphere Creation
-def create_spheres(coordinates):
-    print("begin sphere creation")
-    spheres = []
-    for coord in coordinates:
-        sphere = bproc.object.create_primitive('SPHERE', scale=[0.004, 0.004, 0.004])
-        sphere.enable_rigidbody(active=True, collision_shape='SPHERE')
-        offset_coord = [coord[0]-0.004, coord[1], coord[2]]  # Offset to place on mesh
-        sphere.set_location(offset_coord)
-        # Create a unique material for the sphere
-        mat_marker = bproc.material.create(f"MarkerMaterial_{coord}")
-        grey_col = 1.0
-
-        mat_marker.set_principled_shader_value("Subsurface", 0.2)
-        mat_marker.set_principled_shader_value("Base Color", [grey_col, grey_col, grey_col, 1])
-        mat_marker.set_principled_shader_value("Roughness", np.random.uniform(0, 0.5))
-        mat_marker.set_principled_shader_value("Specular IOR Level", np.random.uniform(0.3, 1.0))
-        mat_marker.set_principled_shader_value("Metallic", np.random.uniform(0, 0.5))
-        
-        sphere.enable_rigidbody(True, mass=1.0, friction=100.0, linear_damping=0.99, angular_damping=0.99)
-        sphere.hide(False)
-        sphere.add_material(mat_marker)
-
-        spheres.append(sphere)
-
-    return spheres
-        
 
 
 def render_and_save(output_dir):
@@ -422,15 +376,8 @@ def main():
         # Configure camera, lights, save JSON, and render
         matrix = configure_camera_and_lights(objs)
 
-        sphere_locations = project_and_save_coordinates(world_coords, matrix, objs[0])
-
         render_and_save(RGB_OUTPUT_DIR)
-        #marker generation and rendering
-        '''
-        create_spheres(sphere_locations)
 
-        render_and_save(MARKER_OUTPUT_DIR)
-        '''
         # Increment the counter after saving both files
         iteration_counter += 1
 
